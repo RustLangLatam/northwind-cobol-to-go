@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this code or evidence, please cite it as below."
+title: "northwind-cobol-to-go: Northwind IBM i COBOL batch programs NWC620 and NWC700 migrated to Go, with golden-output evidence"
+type: software
+authors:
+  - family-names: "Garrido Tovar"
+    given-names: "Eleazar"
+license: GPL-3.0-only
+repository-code: "https://github.com/RustLangLatam/northwind-cobol-to-go"
+date-released: 2026-11-27
+version: "1.0.0"
+keywords:
+  - IBM i
+  - AS/400
+  - COBOL
+  - Db2 for i
+  - Go
+  - code migration
+  - equivalence testing
+abstract: >-
+  Two batch programs of the public Northwind IBM i COBOL application
+  (NWC620, ILE COBOL; NWC700, OPM COBOL/400) migrated to Go gRPC services by
+  Milton Prism, with the spooled output of the original programs run on
+  PUB400 and the record-by-record comparison: NWC620 168 of 168 records
+  identical, NWC700 186 of 188, both in memory and against Db2 for i.
+references:
+  - type: software
+    title: "Northwind IBM i COBOL legacy application"
+    authors:
+      - name: "ZodandSons"
+    repository-code: "https://github.com/ZodandSons/northwind-ibmi-cobol-legacy-application"
+    commit: "1b12bbb76c7176247abbe58dfd87da40549767c4"
+    license: GPL-3.0-only
