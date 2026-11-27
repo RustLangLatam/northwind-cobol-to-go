@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package milton_prism.services.nwc700.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "milton_prism/pkg/pb/gen/milton_prism/services/nwc700/v1;nwc700";
+option java_multiple_files = true;
+option java_outer_classname = "Nwc700ServiceProtoV1";
+option java_package = "com.miltonprism.services.nwc700.v1";
+
+// Nwc700Service runs the NWC700 batch program: the customer list by country,
+// printed from CUSMST sorted by country, city and company name.
+service Nwc700Service {
+  // Nwc700 prints the customer list by country (batch job NWC700, submitted by NWC700C).
+  rpc Nwc700(Nwc700Request) returns (Nwc700Response) {
+    option (google.api.http) = {
+      post: "/v1/customerListReports:print"
+      body: "*"
+    };
+  }
+}
+
+// Nwc700Request carries no parameters: the batch program has no LINKAGE/COMMAREA interface.
+message Nwc700Request {}
+
+// Nwc700Response reports how the run ended.
+message Nwc700Response {
+  // Execution status, the COBOL RETURN-CODE equivalent ("0" on a normal STOP RUN).
+  string status = 1;
+}

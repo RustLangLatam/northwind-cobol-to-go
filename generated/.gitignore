@@ -1,0 +1,17 @@
+# Filled-in configuration and secrets: never commit them.
+.env
+.env.*
+!.env.example
+*.env
+deploy/*/secret.yaml
+deploy/*/secret.env
+deploy/datastore.env
+deploy/*/db2-ca/*.pem
+deploy/*/tls/*
+!deploy/*/tls/README.md
+deploy/*/metrics/*
+!deploy/*/metrics/README.md
+*.key
+# Build output.
+bin/
+core/bin/

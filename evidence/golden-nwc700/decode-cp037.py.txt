@@ -1,0 +1,8 @@
+# Decodes the CPYSPLF *FCFC bytes (SPLOUT has CCSID 65535, so they arrive as EBCDIC)
+# to text, one 133-byte record per line, as CCSID 37. Run: python3 -I decode-cp037.py <in> <out>
+import sys
+lines = open(sys.argv[1], "rb").read().split(b"\n")[:-1]
+assert all(len(l) == 133 for l in lines)
+t = "".join(l.decode("cp037") + "\n" for l in lines)
+assert all(32 <= ord(c) < 127 or c == "\n" for c in t)
+open(sys.argv[2], "w").write(t)

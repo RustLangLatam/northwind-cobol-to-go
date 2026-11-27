@@ -1,0 +1,496 @@
+// db2realrun620 (this two-service build): run the attested NWC620 service of the two-service deliverable against real Db2 for i on
+// PUB400 and compare its spools with the golden ILE COBOL invoices.
+//
+// It creates ORDHDR, ORDDTL, CUSMST, PRDMST and CODTBL in PRISMIA1 from the upstream DDS
+// (CRTSRCPF + CRTPF via QSYS2.QCMDEXC, as the golden run did), loads the golden CSVs with
+// SQL INSERT, prints the orders through application.NewService with the REAL Db2
+// repository (repositories.NewDb2InvoiceRepository over a svcruntime.Holder of
+// db2access.Open, the wiring of nwc620.Build and core/cmd/nwc620-services without the
+// gRPC server), the production printer.DirPrinter and a fixed clock, compares with the
+// goldencompare rules, then drops everything and lists PRISMIA1 again.
+//
+// Adapted from the earlier one-service build's db2realrun.go.txt to the
+// API of this build (see the NWC620 changes in evidence/fidelity/README.md). The comparison rules are unchanged.
+//
+// Usage: db2realrun run <ddsdir> <golden dir> <spool dir> | cleanup
+// The password is read from the first line of <password-file> with os.ReadFile
+// and only set in this process's environment for db2access.ConfigFromEnv. Every output
+// line goes through out(), which scrubs the password as a last guard.
+package main
+
+import (
+	"context"
+	"database/sql"
+	"encoding/csv"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"milton_prism/core/services/nwc620/application"
+	"milton_prism/core/services/nwc620/domain"
+	"milton_prism/core/services/nwc620/infrastructure/printer"
+	"milton_prism/core/services/nwc620/infrastructure/repositories"
+	"milton_prism/core/shared/domainerr"
+	"milton_prism/core/shared/svcruntime"
+	"milton_prism/pkg/db2access"
+	"milton_prism/pkg/db2access/ibmi"
+	_ "milton_prism/pkg/db2access/ibmi/i400conn"
+)
+
+const (
+	lib    = "PRISMIA1"
+	footer = "-=* https://pub400.com *=-"
+)
+
+var (
+	pw          string
+	queryFailed bool
+	tables      = []string{"ORDHDR", "ORDDTL", "CUSMST", "PRDMST", "CODTBL"}
+	orders      = []int64{1001, 1002, 1003, 1004, 1006, 1007, 9999999}
+	// numeric columns of the five files (packed in the DDS): literal, not quoted
+	numeric = map[string]bool{"OHORD#": true, "OHODAT": true, "OHFRT": true, "OHTOTL": true, "PMPRD#": true,
+		"ODORD#": true, "ODLIN#": true, "ODPRD#": true, "ODQTY": true, "ODPRIC": true, "ODDISC": true, "ODEXT": true}
+)
+
+func out(format string, a ...any) {
+	s := fmt.Sprintf(format, a...)
+	if pw != "" {
+		s = strings.ReplaceAll(s, pw, "[redacted]")
+	}
+	fmt.Println(s)
+}
+
+func q(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+// setEnv reads the password and sets the DB2_* variables in this process only.
+func setEnv(ccsid string) {
+	home, _ := os.UserHomeDir()
+	b, err := os.ReadFile(filepath.Join(home, "<password-file>"))
+	if err != nil {
+		fmt.Println("cannot read the credential file")
+		os.Exit(2)
+	}
+	pw = strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
+	if pw == "" {
+		fmt.Println("credential file has no first line")
+		os.Exit(2)
+	}
+	for k, v := range map[string]string{db2access.EnvHost: "pub400.com", db2access.EnvPort: "9471",
+		db2access.EnvLibrary: lib, db2access.EnvUser: "PRISMIA", db2access.EnvPassword: pw,
+		db2access.EnvCommitMode: "*NONE", db2access.EnvCCSID: ccsid} {
+		_ = os.Setenv(k, v)
+	}
+}
+
+func cl(ctx context.Context, db *sql.DB, cmd string) error {
+	out("CL> %s", cmd)
+	_, err := db.ExecContext(ctx, "CALL QSYS2.QCMDEXC("+q(cmd)+")")
+	if err != nil {
+		out("  FAILED: %v", err)
+	}
+	return err
+}
+
+func exec(ctx context.Context, db *sql.DB, s string) error {
+	_, err := db.ExecContext(ctx, s)
+	if err != nil {
+		out("  SQL FAILED %q: %v", s, err)
+	}
+	return err
+}
+
+func rows(ctx context.Context, db *sql.DB, s string) ([][]string, error) {
+	rs, err := db.QueryContext(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	cols, _ := rs.Columns()
+	var res [][]string
+	for rs.Next() {
+		v := make([]sql.NullString, len(cols))
+		p := make([]any, len(cols))
+		for i := range v {
+			p[i] = &v[i]
+		}
+		if err := rs.Scan(p...); err != nil {
+			return res, err
+		}
+		r := make([]string, len(cols))
+		for i, x := range v {
+			r[i] = "<NULL>"
+			if x.Valid {
+				r[i] = strings.TrimRight(x.String, " ")
+			}
+		}
+		res = append(res, r)
+	}
+	return res, rs.Err()
+}
+
+func dump(ctx context.Context, db *sql.DB, s string) []string {
+	rs, err := rows(ctx, db, s)
+	if err != nil {
+		queryFailed = true // a failed listing must not pass the cleanup verification
+		out("  QUERY FAILED: %v", err)
+	}
+	var lines []string
+	for _, r := range rs {
+		l := strings.Join(r, " | ")
+		lines = append(lines, l)
+		out("  %s", l)
+	}
+	return lines
+}
+
+const objQ = "SELECT OBJNAME, OBJTYPE, OBJATTRIBUTE FROM TABLE(QSYS2.OBJECT_STATISTICS('" + lib + "', '*ALL')) ORDER BY OBJNAME"
+const mbrQ = "SELECT SYSTEM_TABLE_NAME, SYSTEM_TABLE_MEMBER FROM QSYS2.SYSPARTITIONSTAT WHERE SYSTEM_TABLE_SCHEMA = '" + lib + "' ORDER BY 1, 2"
+const splQ = "SELECT SPOOLED_FILE_NAME, JOB_NAME, FILE_NUMBER FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC WHERE USER_NAME = 'PRISMIA' ORDER BY CREATE_TIMESTAMP"
+
+type state struct{ objs, mbrs, spls []string }
+
+func snapshot(ctx context.Context, db *sql.DB, label string) state {
+	out("== %s: objects in %s", label, lib)
+	o := dump(ctx, db, objQ)
+	out("== %s: members in %s", label, lib)
+	m := dump(ctx, db, mbrQ)
+	out("== %s: spooled files of PRISMIA", label)
+	s := dump(ctx, db, splQ)
+	return state{o, m, s}
+}
+
+func adminDB(cfg db2access.Config) *sql.DB {
+	db, err := ibmi.Driver{}.Open(cfg)
+	if err != nil {
+		out("FATAL open: %v", err)
+		os.Exit(1)
+	}
+	db.SetMaxOpenConns(1)
+	return db
+}
+
+func member(ctx context.Context, db *sql.DB, mbr, path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := cl(ctx, db, "ADDPFM FILE("+lib+"/ZNWDDS) MBR("+mbr+") SRCTYPE(PF)"); err != nil {
+		return err
+	}
+	alias := lib + ".ZZALIAS"
+	if err := exec(ctx, db, "CREATE ALIAS "+alias+" FOR "+lib+".ZNWDDS("+mbr+")"); err != nil {
+		return err
+	}
+	defer exec(ctx, db, "DROP ALIAS "+alias)
+	for i, l := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if len(l) > 80 {
+			return fmt.Errorf("%s line %d longer than 80", path, i+1)
+		}
+		if err := exec(ctx, db, fmt.Sprintf("INSERT INTO %s (SRCSEQ, SRCDAT, SRCDTA) VALUES (%d, 0, %s)", alias, i+1, q(l))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func load(ctx context.Context, db *sql.DB, gdir string) error {
+	for _, t := range tables {
+		f, err := os.Open(filepath.Join(gdir, "input-"+strings.ToLower(t)+".csv"))
+		if err != nil {
+			return err
+		}
+		recs, err := csv.NewReader(f).ReadAll()
+		f.Close()
+		if err != nil {
+			return err
+		}
+		cols := make([]string, len(recs[0]))
+		for i, c := range recs[0] {
+			cols[i] = `"` + c + `"`
+		}
+		for _, r := range recs[1:] {
+			vals := make([]string, len(r))
+			for i, v := range r {
+				vals[i] = q(v)
+				if numeric[recs[0][i]] {
+					vals[i] = v
+				}
+			}
+			if err := exec(ctx, db, fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)", lib, t,
+				strings.Join(cols, ","), strings.Join(vals, ","))); err != nil {
+				return err
+			}
+		}
+		dump(ctx, db, "SELECT '"+t+"', COUNT(*) FROM "+lib+"."+t)
+	}
+	return nil
+}
+
+func setup(ctx context.Context, db *sql.DB, ddsdir, gdir string) error {
+	if err := cl(ctx, db, "CRTSRCPF FILE("+lib+"/ZNWDDS) RCDLEN(92)"); err != nil {
+		return err
+	}
+	for _, t := range tables {
+		if err := member(ctx, db, t, filepath.Join(ddsdir, strings.ToLower(t)+".pf")); err != nil {
+			return err
+		}
+		if err := cl(ctx, db, "CRTPF FILE("+lib+"/"+t+") SRCFILE("+lib+"/ZNWDDS) SRCMBR("+t+")"); err != nil {
+			return err
+		}
+	}
+	dump(ctx, db, "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, LENGTH, NUMERIC_SCALE, CCSID FROM QSYS2.SYSCOLUMNS WHERE TABLE_SCHEMA = '"+lib+"' AND TABLE_NAME IN ('ORDHDR','ORDDTL','CUSMST','PRDMST','CODTBL') ORDER BY TABLE_NAME, ORDINAL_POSITION")
+	return load(ctx, db, gdir)
+}
+
+func cleanup(ctx context.Context, db *sql.DB, before state) state {
+	out("== cleanup")
+	_ = exec(ctx, db, "DROP ALIAS "+lib+".ZZALIAS")
+	for _, t := range append(append([]string{}, tables...), "ZNWDDS") {
+		_ = cl(ctx, db, "DLTF FILE("+lib+"/"+t+")")
+	}
+	old := map[string]bool{}
+	for _, s := range before.spls {
+		old[s] = true
+	}
+	rs, _ := rows(ctx, db, splQ)
+	for _, r := range rs {
+		if !old[strings.Join(r, " | ")] {
+			_ = cl(ctx, db, "DLTSPLF FILE("+r[0]+") JOB("+r[1]+") SPLNBR("+r[2]+")")
+		}
+	}
+	return snapshot(ctx, db, "after")
+}
+
+type noMetrics struct{}
+
+func (noMetrics) InvoicePrinted() {}
+func (noMetrics) OrderNotFound()  {}
+
+// isPermanent is the open-error classifier of core/cmd/nwc620-services/main.go, copied:
+// the repositories package of this build has no IsPermanentOpenError.
+func isPermanent(err error) bool {
+	var dbErr *db2access.Error
+	if !errors.As(err, &dbErr) {
+		return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+	}
+	switch {
+	case dbErr.SQLState == "28000", dbErr.SQLCode == -30082:
+		return true
+	case dbErr.SQLState == "42501", dbErr.SQLCode == -551, dbErr.SQLCode == -552:
+		return true
+	case dbErr.SQLState == db2access.SQLStateCCSIDMismatch:
+		return true
+	}
+	return false
+}
+
+func same(a, b []string) bool { return strings.Join(a, "\n") == strings.Join(b, "\n") }
+
+// waitStore blocks until the holder has connected or failed permanently.
+func waitStore(h *svcruntime.Holder[*db2access.Store]) error {
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		if err := h.Err(); err != nil {
+			return err
+		}
+		err := h.Do(func(*db2access.Store) error { return nil })
+		if !errors.Is(err, svcruntime.ErrNotReady) {
+			return err
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return errors.New("store did not connect in 2m")
+}
+
+// --- comparison: the goldencompare rules (goldencompare620) ---
+
+type rec struct {
+	page, line int
+	ctl        byte
+	text       string
+}
+
+func (r rec) String() string { return fmt.Sprintf("p%d l%02d |%c%s|", r.page, r.line, r.ctl, r.text) }
+
+func streamRecords(s string) (recs []rec) {
+	page, line, i := 1, 1, 0
+	for i < len(s) {
+		c := byte('?')
+		switch {
+		case s[i] == '\f':
+			c, page, line = '1', page+1, 1
+			i++
+		case s[i] == '\n':
+			n := 0
+			for i < len(s) && s[i] == '\n' {
+				n++
+				i++
+			}
+			line += n
+			c = map[int]byte{1: ' ', 2: '0', 3: '-'}[n]
+			if i >= len(s) { // the document's closing line feed, not a record
+				return
+			}
+		}
+		end := min(i+domain.PrintRecordLength, len(s))
+		recs = append(recs, rec{page, line, c, s[i:end]})
+		i = end
+	}
+	return
+}
+
+func goldenRecords(lines []string) (recs []rec) {
+	page, line := 0, 1
+	for _, l := range lines {
+		c, tx := l[0], l[1:]
+		switch c {
+		case '1':
+			page, line = page+1, 1
+		case ' ':
+			line++
+		case '0':
+			line += 2
+		case '-':
+			line += 3
+		}
+		if strings.TrimSpace(tx) == footer || (c != '1' && strings.TrimSpace(tx) == "") {
+			continue
+		}
+		recs = append(recs, rec{page, line, c, tx})
+	}
+	return
+}
+
+func printAndCompare(ctx context.Context, gdir, spoolRoot string) {
+	tbls, err := repositories.NewTables()
+	if err != nil {
+		out("FATAL tables: %v", err)
+		return
+	}
+	dbCfg, err := db2access.ConfigFromEnv(os.Getenv)
+	if err != nil {
+		out("FATAL config: %v", err)
+		return
+	}
+	holder := &svcruntime.Holder[*db2access.Store]{}
+	holder.Start(ctx, func(ctx context.Context) (*db2access.Store, error) {
+		return db2access.Open(ctx, ibmi.Driver{}, dbCfg)
+	}, 5*time.Second, svcruntime.WithPermanentErrors(isPermanent))
+	defer holder.Close(context.Background())
+	if err := waitStore(holder); err != nil {
+		out("FATAL store: %v", err)
+		return
+	}
+	out("store connected (db2access.Open, CCSID %d, commit %s)", dbCfg.CCSID, dbCfg.CommitMode)
+	repo := repositories.NewDb2InvoiceRepository(holder, tbls)
+	loc, _ := time.LoadLocation("America/Chicago")
+	clock := svcruntime.NewClock(loc, func() time.Time { return time.Date(2026, 11, 24, 12, 0, 0, 0, loc) })
+	totalCmp, totalSame, totalDiff := 0, 0, 0
+	for _, n := range orders {
+		sdir := filepath.Join(spoolRoot, fmt.Sprintf("order-%07d", n))
+		_ = os.RemoveAll(sdir)
+		_ = os.MkdirAll(sdir, 0o755)
+		svc, err := application.NewService(repo, &printer.DirPrinter{Dir: sdir, Clock: clock}, clock, noMetrics{})
+		if err != nil {
+			out("FATAL service: %v", err)
+			return
+		}
+		res, err := svc.PrintInvoice(ctx, n)
+		files, _ := os.ReadDir(sdir)
+		raw, gerr := os.ReadFile(filepath.Join(gdir, fmt.Sprintf("order-%07d.fcfc.txt", n)))
+		if gerr != nil {
+			// ILE: no spooled file. The port of this build answers NotFound (NW2201) instead of a status.
+			ok := len(files) == 0 && domainerr.Is(err, domainerr.NotFound)
+			out("order %d: no golden file (ILE: no spooled file); Go error=%v spooled files=%d (R49 %s)",
+				n, err, len(files), map[bool]string{true: "MATCHES", false: "DIFFERS"}[ok])
+			if !ok {
+				totalDiff++
+			}
+			continue
+		}
+		if err != nil {
+			out("order %d: Go error %v", n, err)
+			totalDiff++
+			continue
+		}
+		if len(files) != 1 {
+			out("order %d: expected 1 spooled file, got %d", n, len(files))
+			totalDiff++
+			continue
+		}
+		b, _ := os.ReadFile(filepath.Join(sdir, files[0].Name()))
+		grecs := streamRecords(string(b))
+		crecs := goldenRecords(strings.Split(strings.TrimRight(string(raw), "\n"), "\n"))
+		cEmpty := len(crecs) > 0 && crecs[0].ctl == '1' && strings.TrimSpace(crecs[0].text) == ""
+		gEmpty := len(grecs) > 0 && grecs[0].page == 2
+		out("order %d: status=%s empty leading page COBOL=%v Go=%v (R48 %s)", n, res.Status, cEmpty, gEmpty,
+			map[bool]string{true: "MATCHES", false: "DIFFERS"}[cEmpty == gEmpty])
+		diffs := 0
+		if cEmpty != gEmpty {
+			diffs++
+		}
+		if cEmpty {
+			crecs = crecs[1:]
+		}
+		cnt := 0
+		for i := 0; i < len(crecs) || i < len(grecs); i++ {
+			var c, g string
+			if i < len(crecs) {
+				c = crecs[i].String()
+			}
+			if i < len(grecs) {
+				g = grecs[i].String()
+			}
+			cnt++
+			if c != g {
+				diffs++
+				out("  order %d rec %d\n    COBOL %s\n    Go    %s", n, i+1, c, g)
+			} else {
+				totalSame++
+			}
+		}
+		out("order %d: %d COBOL records, %d Go records, %d differing", n, len(crecs), len(grecs), diffs)
+		totalCmp += cnt
+		totalDiff += diffs
+	}
+	out("TOTAL records compared: %d, identical: %d, differing items: %d", totalCmp, totalSame, totalDiff)
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("usage: run <ddsdir> <golden dir> <spool dir> | cleanup")
+		os.Exit(2)
+	}
+	setEnv("273")
+	cfg, err := db2access.ConfigFromEnv(os.Getenv)
+	if err != nil {
+		out("FATAL config: %v", err)
+		os.Exit(1)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+	db := adminDB(cfg)
+	defer db.Close()
+	dump(ctx, db, "SELECT CURRENT USER, CURRENT SCHEMA, CURRENT TIMESTAMP, CURRENT SERVER FROM SYSIBM.SYSDUMMY1")
+	dump(ctx, db, "SELECT CCSID, DEFAULT_CCSID FROM TABLE(QSYS2.ACTIVE_JOB_INFO(JOB_NAME_FILTER => '*', DETAILED_INFO => 'ALL')) X")
+	switch os.Args[1] {
+	case "run":
+		before := snapshot(ctx, db, "before")
+		after := func() state {
+			if err := setup(ctx, db, os.Args[2], os.Args[3]); err != nil {
+				out("setup failed: %v", err)
+				return cleanup(ctx, db, before)
+			}
+			printAndCompare(ctx, os.Args[3], os.Args[4])
+			return cleanup(ctx, db, before)
+		}()
+		out("== cleanup verification: objects %v, members %v, spooled files %v (same as before), every listing query answered %v",
+			same(before.objs, after.objs), same(before.mbrs, after.mbrs), same(before.spls, after.spls), !queryFailed)
+	case "probe":
+	case "cleanup":
+		cleanup(ctx, db, snapshot(ctx, db, "before"))
+	}
+}

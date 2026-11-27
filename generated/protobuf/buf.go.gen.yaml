@@ -1,0 +1,31 @@
+version: v2
+managed:
+  enabled: true
+  disable:
+    - file_option: go_package
+      module: buf.build/googleapis/googleapis
+    - file_option: go_package
+      module: buf.build/grpc-ecosystem/grpc-gateway
+    - file_option: go_package
+      module: buf.build/bufbuild/protovalidate
+  override:
+    - file_option: go_package_prefix
+      value: milton_prism/pkg/pb/gen
+
+plugins:
+  # Pinned (B58): an unpinned remote plugin floats to the latest release and rewrites the
+  # tracked *.pb.gw.go on every run. protoc-gen-go and protoc-gen-go-grpc are the versions
+  # of the committed pkg/pb/gen headers; the gateway plugin is the grpc-gateway runtime
+  # version in go.mod. Bump them on purpose and commit the regenerated files. The local
+  # plugins of buf.go.local.yaml (agent image) pin deliverable codegen and are independent.
+  - remote: buf.build/protocolbuffers/go:v1.36.12
+    out: ../pkg/pb/gen
+    opt: paths=source_relative
+
+  - remote: buf.build/grpc/go:v1.6.2
+    out: ../pkg/pb/gen
+    opt: paths=source_relative
+
+  - remote: buf.build/grpc-ecosystem/gateway:v2.29.0
+    out: ../pkg/pb/gen
+    opt: paths=source_relative

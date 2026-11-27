@@ -1,0 +1,50 @@
+1                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+1NORTHWIND TRADERS - DALLAS                                                                          INVOICE   PAGE     1            
+ 2101 COMMERCE ST.  DALLAS TX 75201                                                                  DATE  11/24/26                  
+0ORDER NO.    1001     ORDERED   07/04/26     SHIP VIA  SYNTHETIC EXPRESS                                                            
+0SOLD TO   C0001 SYNTHETIC SUPPLY CO                         SHIP TO   SHIP NAME ONE                                                 
+                 100 TEST AVENUE                                       1 DOCK ROAD                                                   
+                 TESTVILLE       TESTLAND                              PORTTOWN        TESTLAND                                      
+0LN  PROD#  DESCRIPTION                                QTY     UNIT PRICE  DISC      EXTENDED                                        
+   1     1  WIDGET ALPHA                                 10         18.00   15%         153.00                                       
+   2     2  WIDGET BETA                                   3         19.50  999%         525.92-                                      
+   3     3  GADGET GAMMA                                  1         10.00    0%          10.00                                       
+0                                                                ITEMS                  362.92-                                      
+                                                                 FREIGHT                 32.38                                       
+0                                                                TOTAL DUE              330.54-                                      
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+0                                                   -=* https://pub400.com *=-                                                       

@@ -1,0 +1,70 @@
+{
+  "name":  "migrations/237/attestations/2448adb23c741e79",
+  "attestationId":  "2448adb23c741e79",
+  "migrationId":  "237",
+  "freezeId":  "7",
+  "kind":  "MIGRATION_ATTESTATION_KIND_VERIFICATION_RECORD",
+  "predicateType":  "urn:prismia:migration-verification-record:v1",
+  "verificationResult":  "FAILED",
+  "keyId":  "prismia-attest-5162a6cc6121203b",
+  "envelopeSha256":  "5840579b8e53c6fdb4a1e91e84be93cea17695bd8252c346387269c5a321fd4b",
+  "zipSha256":  "7c51d0b491b5d085f93be7665c699da384a9b054ed8fa74946352c1c32b9c6a1",
+  "manifestSha256":  "1c94ee22ac086f80bb6092ea04176da265003eec02d8a1d90ab7388bf6bb2ef2",
+  "issueTime":  "2026-11-25T21:33:35Z",
+  "supersededBy":  "",
+  "claims":  [
+    {
+      "id":  "C1",
+      "status":  "MEASURED"
+    },
+    {
+      "id":  "C2",
+      "status":  "MEASURED"
+    },
+    {
+      "id":  "C3",
+      "status":  "MEASURED"
+    },
+    {
+      "id":  "C4",
+      "status":  "MEASURED"
+    },
+    {
+      "id":  "C5",
+      "status":  "MEASURED"
+    },
+    {
+      "id":  "C6",
+      "status":  "MEASURED"
+    },
+    {
+      "id":  "C7",
+      "status":  "FAILED"
+    },
+    {
+      "id":  "C8",
+      "status":  "NOT_MEASURED"
+    },
+    {
+      "id":  "C9",
+      "status":  "MEASURED"
+    }
+  ],
+  "coveredServices":  [
+    "nwc620",
+    "nwc700"
+  ],
+  "excludedServices":  [
+    "nwc500",
+    "nwc600",
+    "nwc520",
+    "nwc200",
+    "nwc510",
+    "nwc300",
+    "nwc100",
+    "nwc190",
+    "nwc400",
+    "nwc490",
+    "nwc610"
+  ]
+}

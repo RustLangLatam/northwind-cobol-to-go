@@ -1,0 +1,48 @@
+1                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+1NORTHWIND TRADERS - DALLAS                                                                          INVOICE   PAGE     1            
+ 2101 COMMERCE ST.  DALLAS TX 75201                                                                  DATE  11/24/26                  
+0ORDER NO.    1007     ORDERED   01/01/26     SHIP VIA  SYNTHETIC EXPRESS                                                            
+0SOLD TO   C0001 SYNTHETIC SUPPLY CO                         SHIP TO   NO LINES                                                      
+                 100 TEST AVENUE                                       7 DOCK ROAD                                                   
+                 TESTVILLE       TESTLAND                              PORTTOWN        TESTLAND                                      
+0LN  PROD#  DESCRIPTION                                QTY     UNIT PRICE  DISC      EXTENDED                                        
+0                                                                ITEMS                    0.00                                       
+                                                                 FREIGHT                  1.00                                       
+0                                                                TOTAL DUE                1.00                                       
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+0                                                   -=* https://pub400.com *=-                                                       

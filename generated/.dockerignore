@@ -1,0 +1,25 @@
+# The build context is the archive root. Keep build output, vendored trees and
+# every env or secret file out of the images.
+.git
+node_modules
+target
+vendor
+bin
+obj
+build
+__pycache__
+*.pyc
+.venv
+.mypy_cache
+.ruff_cache
+**/.env
+**/.env.*
+**/*.env
+**/*.pem
+**/*.key
+deploy/*/secret.yaml
+deploy/*/secret.env
+deploy/datastore.env
+deploy/*/db2-ca/*
+deploy/*/tls/*
+deploy/*/metrics/*

@@ -1,0 +1,100 @@
+// Package fixture is the synthetic NWC620 test data loaded on PUB400 and fed to the Go port.
+package fixture
+
+import (
+	"fmt"
+	"strings"
+)
+
+type Customer struct{ Cust, Name, Addr, City, Cnty string }
+type Code struct{ Type, Code, Desc string }
+type Product struct {
+	No   int
+	Name string
+}
+type Header struct {
+	OrdNo                        int
+	Cust                         string
+	ODat                         int
+	ShpV                         string
+	Frt                          string // DECIMAL(7,2) literal
+	SNam, SAdr, SCty, SCnt, Totl string // Totl DECIMAL(11,2) literal
+}
+type Line struct {
+	OrdNo, LinNo, PrdNo   int
+	Qty                   int
+	Pric, Disc, Ext       string // DECIMAL literals 9,2 / 3,2 / 11,2
+}
+
+var Customers = []Customer{
+	{"C0001", "SYNTHETIC SUPPLY CO", "100 TEST AVENUE", "TESTVILLE", "TESTLAND"},
+	{"C0002", "LONGNAME CUSTOMER WHOSE NAME FILLS FORTY",
+		"1234567890123456789012345678901234567890ABCDEFGHIJKLMNOPQRST", "FIFTEENCHARCITY", "FIFTEENCHARCNTY"},
+}
+
+var Codes = []Code{
+	{"SHP", "1", "SYNTHETIC EXPRESS"},
+	{"SHP", "3", "SHIPPER DESCRIPTION LONGER THAN THIRTY CHARACTERS (60 MAX)"},
+	{"REG", "9", "A REGION CODE, NOT A SHIPPER"},
+}
+
+var Products = []Product{
+	{1, "WIDGET ALPHA"},
+	{2, "WIDGET BETA"},
+	{3, "GADGET GAMMA"},
+	{99998, "PRODUCT NAME EXACTLY FORTY CHARACTERS XX"},
+}
+
+var Headers = []Header{
+	{1001, "C0001", 1260704, "1", "32.38", "SHIP NAME ONE", "1 DOCK ROAD", "PORTTOWN", "TESTLAND", "-362.92"},
+	{1002, "C9999", 991231, "9", "0.00", "UNKNOWN BUYER", "2 NOWHERE LANE", "NOCITY", "NOLAND", "27.50"},
+	{1003, "C0001", 1000101, "3", "12.00", "SHIP NAME THREE", "3 DOCK ROAD", "PORTTOWN", "TESTLAND", ""},
+	{1004, "C0002", 1261124, "1", "5.55", "SHIP NAME FOUR", "4 DOCK ROAD", "PORTTOWN", "TESTLAND", ""},
+	{1007, "C0001", 1260101, "1", "1.00", "NO LINES", "7 DOCK ROAD", "PORTTOWN", "TESTLAND", "0.00"},
+	{9999999, "C0002", 0, "3", "99999.99", "LIMITS", "9 DOCK ROAD", "PORTTOWN", "TESTLAND", "999999999.99"},
+}
+
+// Calls are the order numbers passed to NWC620 (1006 is not on ORDHDR).
+var Calls = []int{1001, 1002, 1003, 1004, 1006, 1007, 9999999}
+
+var Lines = buildLines()
+
+func cents(c int) string {
+	sign := ""
+	if c < 0 {
+		sign, c = "-", -c
+	}
+	return fmt.Sprintf("%s%d.%02d", sign, c/100, c%100)
+}
+
+func buildLines() []Line {
+	ls := []Line{
+		{1001, 1, 1, 10, "18.00", "0.15", "153.00"},
+		{1001, 2, 2, 3, "19.50", "9.99", "-525.92"},
+		{1001, 3, 3, 1, "10.00", "0.00", "10.00"},
+		{1002, 0, 4, 2, "5.00", "0.05", "9.50"},
+		{1002, 5, 1, 1, "18.00", "0.00", "18.00"},
+	}
+	for _, o := range []struct{ ord, n int }{{1003, 46}, {1004, 40}} {
+		tot := 0
+		for i := 1; i <= o.n; i++ {
+			ext := i * 125
+			tot += ext
+			ls = append(ls, Line{o.ord, i, (i-1)%3 + 1, i, "1.25", "0.00", cents(ext)})
+		}
+		for k := range Headers {
+			if Headers[k].OrdNo == o.ord {
+				Headers[k].Totl = cents(tot)
+			}
+		}
+	}
+	ls = append(ls,
+		Line{9999999, 1, 99998, 99999, "9999999.99", "0.99", "999999999.99"},
+		Line{9999999, 2, 1, 0, "0.00", "-0.25", "-123.45"},
+		Line{9999999, 999, 99999, -5, "-1.00", "0.00", "200.00"},
+	)
+	return ls
+}
+
+// Q quotes an SQL character literal.
+func Q(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }

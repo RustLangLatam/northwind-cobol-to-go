@@ -1,0 +1,54 @@
+1                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+111/25/26            NORTHWIND TRADERS - DALLAS    CUSTOMER LIST BY COUNTRY      PAGE   1                                            
+0CUST   COMPANY                                  CITY            CONTACT                        PHONE                                
+0COUNTRY:                                                                                                                            
+ C0004                                                                                                                               
+ C0003  BLANK COUNTRY CO                                         BLANK CITY TOO                 000-0000                             
+0          CUSTOMERS IN COUNTRY       2                                                                                              
+0COUNTRY: testland                                                                                                                   
+ C0006  LOWER CASE COUNTRY CO                    testville                                                                           
+0          CUSTOMERS IN COUNTRY       1                                                                                              
+0COUNTRY: FIFTEENCHARCNTY                                                                                                            
+ C0002  LONGNAME CUSTOMER WHOSE NAME FILLS FORTY FIFTEENCHARCITY                                                                     
+0          CUSTOMERS IN COUNTRY       1                                                                                              
+0COUNTRY: TESTLAND                                                                                                                   
+ C0010  MAXIMUM LENGTH FIELDS CO 1234567890ABCDE CITYFIFTEENXXXX CONTACT NAME FILLS THIRTY XXXX +00 (000) 000-0000 X1234             
+ C0011  lower case name co                       TESTVILLE                                                                           
+ C0005  DELETED STATUS CO                        TESTVILLE       STATUS D IS PRINTED            111-1111                             
+ C0001  SYNTHETIC SUPPLY CO                      TESTVILLE                                                                           
+ C0009  TIE CO                                   TESTVILLE       INSERTED FIRST                                                      
+ C0008  TIE CO                                   TESTVILLE       INSERTED SECOND                                                     
+ C0007  DIGIT CITY CO                            1ST CITY                                                                            
+0          CUSTOMERS IN COUNTRY       7                                                                                              
+-          TOTAL CUSTOMERS           11                                                                                              
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+0                                                   -=* https://pub400.com *=-                                                       

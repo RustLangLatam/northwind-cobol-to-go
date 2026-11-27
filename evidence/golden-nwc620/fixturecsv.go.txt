@@ -1,0 +1,51 @@
+// fixturecsv writes the PUB400 NWC620 fixture as one CSV per file.
+package main
+
+import (
+	"encoding/csv"
+	"os"
+	"path/filepath"
+	"strconv"
+
+	"milton_prism/cmd/pub400nwc620/fixture"
+)
+
+func write(dir, name string, rows [][]string) {
+	f, err := os.Create(filepath.Join(dir, name))
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	w := csv.NewWriter(f)
+	_ = w.WriteAll(rows)
+}
+
+func main() {
+	d := os.Args[1]
+	it := strconv.Itoa
+	r := [][]string{{"CMCUST", "CMNAME", "CMADDR", "CMCITY", "CMCNTY"}}
+	for _, c := range fixture.Customers {
+		r = append(r, []string{c.Cust, c.Name, c.Addr, c.City, c.Cnty})
+	}
+	write(d, "input-cusmst.csv", r)
+	r = [][]string{{"CTTYPE", "CTCODE", "CTDESC"}}
+	for _, c := range fixture.Codes {
+		r = append(r, []string{c.Type, c.Code, c.Desc})
+	}
+	write(d, "input-codtbl.csv", r)
+	r = [][]string{{"PMPRD#", "PMNAME"}}
+	for _, p := range fixture.Products {
+		r = append(r, []string{it(p.No), p.Name})
+	}
+	write(d, "input-prdmst.csv", r)
+	r = [][]string{{"OHORD#", "OHCUST", "OHODAT", "OHSHPV", "OHFRT", "OHSNAM", "OHSADR", "OHSCTY", "OHSCNT", "OHTOTL"}}
+	for _, h := range fixture.Headers {
+		r = append(r, []string{it(h.OrdNo), h.Cust, it(h.ODat), h.ShpV, h.Frt, h.SNam, h.SAdr, h.SCty, h.SCnt, h.Totl})
+	}
+	write(d, "input-ordhdr.csv", r)
+	r = [][]string{{"ODORD#", "ODLIN#", "ODPRD#", "ODQTY", "ODPRIC", "ODDISC", "ODEXT"}}
+	for _, l := range fixture.Lines {
+		r = append(r, []string{it(l.OrdNo), it(l.LinNo), it(l.PrdNo), it(l.Qty), l.Pric, l.Disc, l.Ext})
+	}
+	write(d, "input-orddtl.csv", r)
+}

@@ -1,0 +1,26 @@
+order 1001 rec 0
+  COBOL p1 l01 |1                                                                                                                                    | (empty leading page)
+  Go    <none: no leading page>
+order 1001: 13 COBOL records, 13 Go records, 1 differing
+order 1002 rec 0
+  COBOL p1 l01 |1                                                                                                                                    | (empty leading page)
+  Go    <none: no leading page>
+order 1002: 12 COBOL records, 12 Go records, 1 differing
+order 1003 rec 0
+  COBOL p1 l01 |1                                                                                                                                    | (empty leading page)
+  Go    <none: no leading page>
+order 1003: 63 COBOL records, 63 Go records, 1 differing
+order 1004 rec 0
+  COBOL p1 l01 |1                                                                                                                                    | (empty leading page)
+  Go    <none: no leading page>
+order 1004: 57 COBOL records, 57 Go records, 1 differing
+order 1006: no golden file (ILE produced no spooled file); Go printed=false, handed the printer a spooled file=true with 0 lines
+order 1007 rec 0
+  COBOL p1 l01 |1                                                                                                                                    | (empty leading page)
+  Go    <none: no leading page>
+order 1007: 10 COBOL records, 10 Go records, 1 differing
+order 9999999 rec 0
+  COBOL p1 l01 |1                                                                                                                                    | (empty leading page)
+  Go    <none: no leading page>
+order 9999999: 13 COBOL records, 13 Go records, 1 differing
+TOTAL differing records: 7

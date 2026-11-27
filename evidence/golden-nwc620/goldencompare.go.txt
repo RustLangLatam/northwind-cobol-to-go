@@ -1,0 +1,214 @@
+// goldencompare runs the frozen NWC620 Go port on the PUB400 fixture and compares its
+// spooled file, line by line and byte by byte, with the golden FCFC files of the ILE run.
+// Usage: goldencompare <golden dir> <go-output dir>
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	cobolnum "github.com/RustLangLatam/cobolnum-go"
+
+	"milton_prism/cmd/pub400nwc620/fixture"
+	"milton_prism/core/services/nwc620/application"
+	"milton_prism/core/services/nwc620/domain"
+)
+
+const footer = "-=* https://pub400.com *=-" // PUB400 adds it to every page of every spooled file
+
+type repo struct{}
+
+func dec(p cobolnum.Pic, s string) cobolnum.Dec {
+	d, sizeErr, err := p.ParseDec(s, cobolnum.Truncation)
+	if err != nil || sizeErr {
+		panic(fmt.Sprintf("fixture value %q does not fit: %v", s, err))
+	}
+	return d
+}
+
+func key(d cobolnum.Dec) int { n, _ := strconv.Atoi(d.Plain()); return n }
+
+func (repo) GetOrderHeader(_ context.Context, o cobolnum.Dec) (*domain.OrderHeader, bool, error) {
+	for _, h := range fixture.Headers {
+		if h.OrdNo == key(o) {
+			return &domain.OrderHeader{
+				OrderNo: dec(domain.PicOrderNo, strconv.Itoa(h.OrdNo)), Customer: h.Cust,
+				OrderDate: dec(domain.PicOHOrderDate, strconv.Itoa(h.ODat)), ShipVia: h.ShpV,
+				Freight: dec(domain.PicOHFreight, h.Frt), ShipName: h.SNam, ShipAddress: h.SAdr,
+				ShipCity: h.SCty, ShipCountry: h.SCnt, Total: dec(domain.PicOHTotal, h.Totl),
+			}, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
+func (repo) GetCustomer(_ context.Context, c string) (*domain.Customer, bool, error) {
+	for _, x := range fixture.Customers {
+		if x.Cust == strings.TrimRight(c, " ") {
+			return &domain.Customer{Name: x.Name, Address: x.Addr, City: x.City, Country: x.Cnty}, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
+func (repo) GetCodeDescription(_ context.Context, t, c string) (string, bool, error) {
+	for _, x := range fixture.Codes {
+		if x.Type == t && x.Code == strings.TrimRight(c, " ") {
+			return x.Desc, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func (repo) ListOrderLines(_ context.Context, o cobolnum.Dec) ([]domain.OrderLine, error) {
+	var ls []fixture.Line
+	for _, l := range fixture.Lines {
+		if l.OrdNo == key(o) && l.LinNo >= 0 {
+			ls = append(ls, l)
+		}
+	}
+	sort.Slice(ls, func(i, j int) bool { return ls[i].LinNo < ls[j].LinNo })
+	out := make([]domain.OrderLine, 0, len(ls))
+	for _, l := range ls {
+		out = append(out, domain.OrderLine{
+			LineNo: dec(domain.PicODLineNo, strconv.Itoa(l.LinNo)), ProductNo: dec(domain.PicODProductNo, strconv.Itoa(l.PrdNo)),
+			Quantity: dec(domain.PicODQuantity, strconv.Itoa(l.Qty)), UnitPrice: dec(domain.PicODPrice, l.Pric),
+			Discount: dec(domain.PicODDiscount, l.Disc), Extended: dec(domain.PicODExtended, l.Ext),
+		})
+	}
+	return out, nil
+}
+
+func (repo) GetProductName(_ context.Context, p cobolnum.Dec) (string, bool, error) {
+	for _, x := range fixture.Products {
+		if x.No == key(p) {
+			return x.Name, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+type printer struct{ last *domain.SpoolFile }
+
+func (p *printer) Print(_ context.Context, s *domain.SpoolFile) error { p.last = s; return nil }
+
+// rec is one program record placed on the page: FCFC control + 132-byte text.
+type rec struct {
+	page, line int
+	ctl        byte
+	text       string
+}
+
+func (r rec) String() string { return fmt.Sprintf("p%d l%02d |%c%s|", r.page, r.line, r.ctl, r.text) }
+
+// goRecords renders the port's PrintLines as FCFC and numbers the pages as the port's
+// printer.Render does: the first AFTER ADVANCING PAGE opens page 1 (no form feed).
+func goRecords(s *domain.SpoolFile) (recs []rec, fcfc []string) {
+	page, line := 0, 1
+	for _, l := range s.Lines {
+		var c byte
+		switch {
+		case l.NewPage:
+			c, page, line = '1', page+1, 1
+		case l.Advance == 1:
+			c, line = ' ', line+1
+		case l.Advance == 2:
+			c, line = '0', line+2
+		case l.Advance == 3:
+			c, line = '-', line+3
+		}
+		t := fmt.Sprintf("%-132s", l.Text)
+		recs = append(recs, rec{page, line, c, t})
+		fcfc = append(fcfc, string(c)+t)
+	}
+	return
+}
+
+// goldenRecords places every golden FCFC line on its page and drops what PUB400 adds:
+// the footer line and the blank spacing lines (' ', '0', '-' with no text). A blank
+// '1' line is kept: it is a page eject the program caused.
+func goldenRecords(lines []string) (recs []rec) {
+	page, line := 0, 1
+	for _, l := range lines {
+		c, t := l[0], l[1:]
+		switch c {
+		case '1':
+			page, line = page+1, 1
+		case ' ':
+			line++
+		case '0':
+			line += 2
+		case '-':
+			line += 3
+		}
+		if strings.TrimSpace(t) == footer || (c != '1' && strings.TrimSpace(t) == "") {
+			continue
+		}
+		recs = append(recs, rec{page, line, c, t})
+	}
+	return
+}
+
+func main() {
+	gdir, odir := os.Args[1], os.Args[2]
+	now := func() time.Time { return time.Date(2026, time.November, 24, 12, 0, 0, 0, time.UTC) }
+	total := 0
+	for _, ord := range fixture.Calls {
+		p := &printer{}
+		svc, err := application.NewService(repo{}, p, now)
+		if err != nil {
+			panic(err)
+		}
+		res, err := svc.PrintInvoice(context.Background(), int32(ord))
+		if err != nil {
+			fmt.Printf("order %d: Go error %v\n", ord, err)
+			continue
+		}
+		grecs, fcfc := goRecords(res.Spool)
+		name := fmt.Sprintf("order-%07d.fcfc.txt", ord)
+		_ = os.WriteFile(filepath.Join(odir, name), []byte(strings.Join(fcfc, "\n")+map[bool]string{true: "\n"}[len(fcfc) > 0]), 0o644)
+		raw, err := os.ReadFile(filepath.Join(gdir, name))
+		var crecs []rec
+		if err != nil {
+			fmt.Printf("order %d: no golden file (ILE produced no spooled file); Go printed=%v, handed the printer a spooled file=%v with %d lines\n", ord, res.Printed, p.last != nil, len(res.Spool.Lines))
+			if p.last != nil {
+				total++
+			}
+			continue
+		}
+		crecs = goldenRecords(strings.Split(strings.TrimRight(string(raw), "\n"), "\n"))
+		diffs := 0
+		// IBM i: the first WRITE AFTER ADVANCING PAGE at the open position (line 1) ejects
+		// an empty page 1. Report it once, then compare the rest with pages renumbered.
+		if len(crecs) > 0 && crecs[0].ctl == '1' && strings.TrimSpace(crecs[0].text) == "" {
+			diffs++
+			fmt.Printf("order %d rec 0\n  COBOL %s (empty leading page)\n  Go    <none: no leading page>\n", ord, crecs[0])
+			crecs = crecs[1:]
+			for i := range crecs {
+				crecs[i].page--
+			}
+		}
+		for i := 0; i < len(crecs) || i < len(grecs); i++ {
+			var c, g string
+			if i < len(crecs) {
+				c = crecs[i].String()
+			}
+			if i < len(grecs) {
+				g = grecs[i].String()
+			}
+			if c != g {
+				diffs++
+				fmt.Printf("order %d rec %d\n  COBOL %s\n  Go    %s\n", ord, i+1, c, g)
+			}
+		}
+		fmt.Printf("order %d: %d COBOL records, %d Go records, %d differing\n", ord, len(crecs), len(grecs), diffs)
+		total += diffs
+	}
+	fmt.Printf("TOTAL differing records: %d\n", total)
+}

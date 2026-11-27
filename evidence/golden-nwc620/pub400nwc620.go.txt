@@ -1,0 +1,421 @@
+// pub400nwc620: build NWC620 on PUB400 in PRISMIA1, run it on synthetic data, copy each
+// spooled invoice (CPYSPLF CTLCHAR(*FCFC)) to local golden files, then drop everything.
+// Usage: pub400nwc620 probe | run <srcdir> <outdir> | cleanup
+// Every output line goes through out(), which scrubs the password as a last guard.
+package main
+
+import (
+	"bufio"
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"milton_prism/cmd/pub400nwc620/fixture"
+	"milton_prism/pkg/db2access"
+	"milton_prism/pkg/db2access/ibmi"
+	_ "milton_prism/pkg/db2access/ibmi/i400conn"
+)
+
+const lib = "PRISMIA1"
+
+var pw string
+
+func out(format string, a ...any) {
+	s := fmt.Sprintf(format, a...)
+	if pw != "" {
+		s = strings.ReplaceAll(s, pw, "[redacted]")
+	}
+	fmt.Println(s)
+}
+
+func readPW() string {
+	home, _ := os.UserHomeDir()
+	f, err := os.Open(filepath.Join(home, "<password-file>"))
+	if err != nil {
+		fmt.Println("cannot open the credential file")
+		os.Exit(2)
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	if !sc.Scan() {
+		fmt.Println("credential file has no first line")
+		os.Exit(2)
+	}
+	return strings.TrimSpace(sc.Text())
+}
+
+func cl(ctx context.Context, db *sql.DB, cmd string) error {
+	out("CL> %s", cmd)
+	_, err := db.ExecContext(ctx, "CALL QSYS2.QCMDEXC('"+strings.ReplaceAll(cmd, "'", "''")+"')")
+	if err != nil {
+		out("  FAILED: %v", err)
+	}
+	return err
+}
+
+func exec(ctx context.Context, db *sql.DB, q string) error {
+	_, err := db.ExecContext(ctx, q)
+	if err != nil {
+		out("  SQL FAILED %q: %v", q, err)
+	}
+	return err
+}
+
+func rows(ctx context.Context, db *sql.DB, q string) ([][]string, error) {
+	rs, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	cols, _ := rs.Columns()
+	var res [][]string
+	for rs.Next() {
+		v := make([]sql.NullString, len(cols))
+		p := make([]any, len(cols))
+		for i := range v {
+			p[i] = &v[i]
+		}
+		if err := rs.Scan(p...); err != nil {
+			return res, err
+		}
+		r := make([]string, len(cols))
+		for i, x := range v {
+			if x.Valid {
+				r[i] = x.String
+			} else {
+				r[i] = "<NULL>"
+			}
+		}
+		res = append(res, r)
+	}
+	return res, rs.Err()
+}
+
+func dump(ctx context.Context, db *sql.DB, q string) {
+	rs, err := rows(ctx, db, q)
+	if err != nil {
+		out("  QUERY FAILED: %v", err)
+	}
+	for _, r := range rs {
+		for i := range r {
+			r[i] = strings.TrimRight(r[i], " ")
+		}
+		out("  %s", strings.Join(r, " | "))
+	}
+}
+
+const objQ = "SELECT OBJNAME, OBJTYPE, OBJATTRIBUTE FROM TABLE(QSYS2.OBJECT_STATISTICS('" + lib + "', '*ALL')) ORDER BY OBJNAME"
+const splQ = "SELECT SPOOLED_FILE_NAME, JOB_NAME, FILE_NUMBER, TOTAL_PAGES, STATUS, OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, CREATE_TIMESTAMP FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC WHERE USER_NAME = 'PRISMIA' ORDER BY CREATE_TIMESTAMP"
+
+func open() (*sql.DB, context.Context, context.CancelFunc) {
+	pw = readPW()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	db, err := ibmi.Driver{}.Open(db2access.Config{Host: "pub400.com", User: "PRISMIA",
+		Password: db2access.Secret(pw), Library: lib, CommitMode: db2access.CommitNone})
+	if err != nil {
+		out("FATAL open: %v", err)
+		os.Exit(1)
+	}
+	db.SetMaxOpenConns(1) // one server job: overrides and the library list live in it
+	return db, ctx, cancel
+}
+
+func probe(ctx context.Context, db *sql.DB) {
+	dump(ctx, db, "SELECT CURRENT USER, CURRENT SCHEMA, CURRENT TIMESTAMP, CURRENT SERVER FROM SYSIBM.SYSDUMMY1")
+	dump(ctx, db, "SELECT JOB_NAME, JOB_CCSID, JOB_DATE FROM TABLE(QSYS2.ACTIVE_JOB_INFO(JOB_NAME_FILTER => '*', DETAILED_INFO => 'ALL')) X")
+	dump(ctx, db, "SELECT SYSTEM_SCHEMA_NAME, TYPE FROM QSYS2.LIBRARY_LIST_INFO ORDER BY ORDINAL_POSITION")
+	dump(ctx, db, "SELECT OBJNAME, OBJTYPE FROM TABLE(QSYS2.OBJECT_STATISTICS('QSYS', '*CMD', 'CRTBNDCBL')) X")
+	dump(ctx, db, "SELECT SYSTEM_TABLE_NAME, SYSTEM_TABLE_MEMBER, SOURCE_TYPE, NUMBER_ROWS FROM QSYS2.SYSPARTITIONSTAT WHERE SYSTEM_TABLE_SCHEMA = '"+lib+"' ORDER BY 1, 2")
+	dump(ctx, db, "SELECT TABLE_NAME, ROW_LENGTH FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = '"+lib+"'")
+	dump(ctx, db, "SELECT V_JOB_DATE FROM TABLE(QSYS2.GET_JOB_INFO('*')) X")
+	out("== objects in %s", lib)
+	dump(ctx, db, objQ)
+	out("== spooled files of PRISMIA")
+	dump(ctx, db, splQ)
+}
+
+// member creates a source member and fills it from a local file.
+func member(ctx context.Context, db *sql.DB, srcf, mbr, typ, path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := cl(ctx, db, "ADDPFM FILE("+lib+"/"+srcf+") MBR("+mbr+") SRCTYPE("+typ+")"); err != nil {
+		return err
+	}
+	alias := lib + ".ZZALIAS"
+	if err := exec(ctx, db, "CREATE ALIAS "+alias+" FOR "+lib+"."+srcf+"("+mbr+")"); err != nil {
+		return err
+	}
+	defer exec(ctx, db, "DROP ALIAS "+alias)
+	for i, l := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if len(l) > 80 { // the COBOL and DDS sources are 80-column cards
+			return fmt.Errorf("%s line %d longer than 80", path, i+1)
+		}
+		if err := exec(ctx, db, fmt.Sprintf("INSERT INTO %s (SRCSEQ, SRCDAT, SRCDTA) VALUES (%d, 0, %s)", alias, i+1, fixture.Q(l))); err != nil {
+			return err
+		}
+	}
+	out("  %s/%s(%s) loaded", lib, srcf, mbr)
+	return nil
+}
+
+func load(ctx context.Context, db *sql.DB) error {
+	for _, c := range fixture.Customers {
+		if err := exec(ctx, db, fmt.Sprintf("INSERT INTO %s.CUSMST (CMCUST, CMNAME, CMADDR, CMCITY, CMCNTY) VALUES (%s,%s,%s,%s,%s)",
+			lib, fixture.Q(c.Cust), fixture.Q(c.Name), fixture.Q(c.Addr), fixture.Q(c.City), fixture.Q(c.Cnty))); err != nil {
+			return err
+		}
+	}
+	for _, c := range fixture.Codes {
+		if err := exec(ctx, db, fmt.Sprintf("INSERT INTO %s.CODTBL (CTTYPE, CTCODE, CTDESC) VALUES (%s,%s,%s)",
+			lib, fixture.Q(c.Type), fixture.Q(c.Code), fixture.Q(c.Desc))); err != nil {
+			return err
+		}
+	}
+	for _, p := range fixture.Products {
+		if err := exec(ctx, db, fmt.Sprintf(`INSERT INTO %s.PRDMST ("PMPRD#", PMNAME) VALUES (%d,%s)`, lib, p.No, fixture.Q(p.Name))); err != nil {
+			return err
+		}
+	}
+	for _, h := range fixture.Headers {
+		if err := exec(ctx, db, fmt.Sprintf(`INSERT INTO %s.ORDHDR ("OHORD#", OHCUST, OHODAT, OHSHPV, OHFRT, OHSNAM, OHSADR, OHSCTY, OHSCNT, OHTOTL) VALUES (%d,%s,%d,%s,%s,%s,%s,%s,%s,%s)`,
+			lib, h.OrdNo, fixture.Q(h.Cust), h.ODat, fixture.Q(h.ShpV), h.Frt, fixture.Q(h.SNam), fixture.Q(h.SAdr), fixture.Q(h.SCty), fixture.Q(h.SCnt), h.Totl)); err != nil {
+			return err
+		}
+	}
+	for _, l := range fixture.Lines {
+		if err := exec(ctx, db, fmt.Sprintf(`INSERT INTO %s.ORDDTL ("ODORD#", "ODLIN#", "ODPRD#", ODQTY, ODPRIC, ODDISC, ODEXT) VALUES (%d,%d,%d,%d,%s,%s,%s)`,
+			lib, l.OrdNo, l.LinNo, l.PrdNo, l.Qty, l.Pric, l.Disc, l.Ext)); err != nil {
+			return err
+		}
+	}
+	for _, t := range []string{"CUSMST", "CODTBL", "PRDMST", "ORDHDR", "ORDDTL"} {
+		dump(ctx, db, "SELECT '"+t+"', COUNT(*) FROM "+lib+"."+t)
+	}
+	return nil
+}
+
+type spl struct{ name, job, num string }
+
+func spools(ctx context.Context, db *sql.DB) map[string]spl {
+	rs, err := rows(ctx, db, splQ)
+	if err != nil {
+		out("  spool query failed: %v", err)
+	}
+	m := map[string]spl{}
+	for _, r := range rs {
+		s := spl{strings.TrimSpace(r[0]), strings.TrimSpace(r[1]), strings.TrimSpace(r[2])}
+		m[s.job+"#"+s.name+"#"+s.num] = s
+	}
+	return m
+}
+
+func packed7(n int) string { return fmt.Sprintf("X'%07dF'", n) }
+
+var baseline = map[string]spl{}
+
+var copyMembers = []string{"NWC620", "ORDHDRCP", "ORDDTLCP", "CUSMSTCP", "PRDMSTCP", "CODTBLCP"}
+
+func runAll(ctx context.Context, db *sql.DB, srcdir, outdir string) {
+	baseline = spools(ctx, db)
+	out("baseline: %d spooled files of PRISMIA before the run", len(baseline))
+	defer cleanup(ctx, db)
+
+	if cl(ctx, db, "ADDLIBLE LIB("+lib+")") != nil {
+		// already in the list is fine: continue
+	}
+	dump(ctx, db, "SELECT SYSTEM_SCHEMA_NAME, TYPE FROM QSYS2.LIBRARY_LIST_INFO ORDER BY ORDINAL_POSITION")
+	// QCBLLESRC already exists in PRISMIA1 (empty, not ours): only members are added to it,
+	// because COPY without OF resolves to QCBLLESRC in *LIBL. DDS goes to our own ZNWDDS.
+	if cl(ctx, db, "CRTSRCPF FILE("+lib+"/ZNWDDS) RCDLEN(92)") != nil {
+		return
+	}
+	for _, f := range []string{"ORDHDR", "ORDDTL", "CUSMST", "PRDMST", "CODTBL"} {
+		if member(ctx, db, "ZNWDDS", f, "PF", filepath.Join(srcdir, "qddssrc", strings.ToLower(f)+".pf")) != nil {
+			return
+		}
+		if cl(ctx, db, "CRTPF FILE("+lib+"/"+f+") SRCFILE("+lib+"/ZNWDDS) SRCMBR("+f+")") != nil {
+			return
+		}
+	}
+	for _, m := range copyMembers {
+		if member(ctx, db, "QCBLLESRC", m, "CBLLE", filepath.Join(srcdir, "qcbllesrc", strings.ToLower(m)+".cblle")) != nil {
+			return
+		}
+	}
+	dump(ctx, db, "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, LENGTH, NUMERIC_SCALE FROM QSYS2.SYSCOLUMNS WHERE TABLE_SCHEMA = '"+lib+"' AND TABLE_NAME IN ('ORDHDR','ORDDTL','CUSMST','PRDMST','CODTBL') ORDER BY TABLE_NAME, ORDINAL_POSITION")
+	if load(ctx, db) != nil {
+		return
+	}
+	if cl(ctx, db, "CRTBNDCBL PGM("+lib+"/NWC620) SRCFILE("+lib+"/QCBLLESRC) SRCMBR(NWC620) REPLACE(*YES)") != nil {
+		listing(ctx, db)
+		return
+	}
+	listing(ctx, db)
+	if cl(ctx, db, "CRTPF FILE("+lib+"/SPLOUT) RCDLEN(133)") != nil {
+		return
+	}
+	dump(ctx, db, "SELECT CURRENT TIMESTAMP FROM SYSIBM.SYSDUMMY1")
+	for _, ord := range fixture.Calls {
+		before := spools(ctx, db)
+		if cl(ctx, db, "OVRPRTF FILE(QSYSPRT) PAGESIZE(66 132) LPI(6) CPI(10) FORMTYPE(INVOICE) SPLFNAME(NWINVOICE) HOLD(*YES) SHARE(*NO) OVRSCOPE(*JOB)") != nil {
+			return
+		}
+		callErr := cl(ctx, db, "CALL PGM("+lib+"/NWC620) PARM("+packed7(ord)+")")
+		_ = cl(ctx, db, "DLTOVR FILE(QSYSPRT) LVL(*JOB)")
+		if callErr != nil {
+			return
+		}
+		var got []spl
+		for k, s := range spools(ctx, db) {
+			if _, ok := before[k]; !ok {
+				got = append(got, s)
+			}
+		}
+		out("order %d: %d new spooled file(s) %v", ord, len(got), got)
+		for _, s := range got {
+			if s.name != "NWINVOICE" {
+				continue
+			}
+			dump(ctx, db, "SELECT SPOOLED_FILE_NAME, TOTAL_PAGES, SIZE, FORM_TYPE, STATUS, PAGE_LENGTH, PAGE_WIDTH, LINES_PER_INCH, CHARACTERS_PER_INCH FROM QSYS2.OUTPUT_QUEUE_ENTRIES WHERE JOB_NAME = '"+s.job+"' AND SPOOLED_FILE_NAME = 'NWINVOICE' AND FILE_NUMBER = "+s.num)
+			if cl(ctx, db, "CPYSPLF FILE(NWINVOICE) TOFILE("+lib+"/SPLOUT) JOB("+s.job+") SPLNBR("+s.num+") MBROPT(*REPLACE) CTLCHAR(*FCFC)") != nil {
+				continue
+			}
+			rs, err := rows(ctx, db, "SELECT SPLOUT FROM "+lib+".SPLOUT ORDER BY RRN(SPLOUT)")
+			if err != nil {
+				out("  read SPLOUT: %v", err)
+				continue
+			}
+			var b strings.Builder
+			for _, r := range rs {
+				b.WriteString(r[0])
+				b.WriteString("\n")
+			}
+			p := filepath.Join(outdir, fmt.Sprintf("order-%07d.fcfc.txt", ord))
+			if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
+				out("  write %s: %v", p, err)
+			}
+			out("  %d lines -> %s", len(rs), p)
+		}
+	}
+	dump(ctx, db, "SELECT CURRENT TIMESTAMP FROM SYSIBM.SYSDUMMY1")
+}
+
+// listing prints the compile listing summary (message lines) of the newest QSYSPRT/NWC620.
+func listing(ctx context.Context, db *sql.DB) {
+	for k, s := range spools(ctx, db) {
+		if _, ok := baseline[k]; ok || s.name != "NWC620" {
+			continue
+		}
+		dump(ctx, db, "SELECT SPOOLED_DATA FROM TABLE(SYSTOOLS.SPOOLED_FILE_DATA(JOB_NAME => '"+s.job+"', SPOOLED_FILE_NAME => 'NWC620', SPOOLED_FILE_NUMBER => "+s.num+")) X WHERE SPOOLED_DATA LIKE '%LNC%' OR SPOOLED_DATA LIKE '%Message Summary%' OR SPOOLED_DATA LIKE '%Program NWC620%'")
+	}
+}
+
+func cleanup(ctx context.Context, db *sql.DB) {
+	out("== cleanup")
+	_ = exec(ctx, db, "DROP ALIAS "+lib+".ZZALIAS")
+	_ = cl(ctx, db, "DLTOVR FILE(QSYSPRT) LVL(*JOB)")
+	_ = cl(ctx, db, "DLTPGM PGM("+lib+"/NWC620)")
+	for _, f := range []string{"SPLOUT", "ORDDTL", "ORDHDR", "CUSMST", "PRDMST", "CODTBL", "ZNWDDS"} {
+		_ = cl(ctx, db, "DLTF FILE("+lib+"/"+f+")")
+	}
+	for _, m := range copyMembers {
+		_ = cl(ctx, db, "RMVM FILE("+lib+"/QCBLLESRC) MBR("+m+")")
+	}
+	mine := map[string]bool{"NWINVOICE": true, "NWC620": true, "ORDHDR": true, "ORDDTL": true, "CUSMST": true,
+		"PRDMST": true, "CODTBL": true, "SPLOUT": true, "ZNWDDS": true, "QPJOBLOG": true}
+	for k, s := range spools(ctx, db) {
+		if _, ok := baseline[k]; ok || !mine[s.name] {
+			continue
+		}
+		_ = cl(ctx, db, "DLTSPLF FILE("+s.name+") JOB("+s.job+") SPLNBR("+s.num+")")
+	}
+	_ = cl(ctx, db, "RMVLIBLE LIB("+lib+")")
+	out("== objects in %s after cleanup", lib)
+	dump(ctx, db, objQ)
+	dump(ctx, db, "SELECT SYSTEM_TABLE_NAME, SYSTEM_TABLE_MEMBER FROM QSYS2.SYSPARTITIONSTAT WHERE SYSTEM_TABLE_SCHEMA = '"+lib+"' ORDER BY 1, 2")
+	out("== spooled files of PRISMIA after cleanup")
+	dump(ctx, db, splQ)
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("usage: probe | run <srcdir> <outdir> | cleanup")
+		os.Exit(2)
+	}
+	db, ctx, cancel := open()
+	defer cancel()
+	defer db.Close()
+	switch os.Args[1] {
+	case "probe":
+		probe(ctx, db)
+	case "run":
+		runAll(ctx, db, os.Args[2], os.Args[3])
+	case "peek":
+		dump(ctx, db, "SELECT ORDINAL_POSITION, SPOOLED_DATA FROM TABLE(SYSTOOLS.SPOOLED_FILE_DATA(JOB_NAME => '446725/PRISMIA/QPRTJOB', SPOOLED_FILE_NAME => 'PRZREF', SPOOLED_FILE_NUMBER => 1)) X WHERE SPOOLED_DATA LIKE '%pub400%' OR ORDINAL_POSITION IN (1,40,60,61,62,63,64,65,66,67,68,70,71) ORDER BY 1")
+	case "control":
+		control(ctx, db, os.Args[2], os.Args[3])
+	case "cleanup":
+		baseline = map[string]spl{}
+		cleanup(ctx, db)
+	}
+}
+
+// control compiles two 20-line programs that differ only in the first WRITE (AFTER
+// ADVANCING PAGE vs 1 LINE), to tell the IBM i first-page behaviour from PUB400's footer.
+func control(ctx context.Context, db *sql.DB, srcdir, outdir string) {
+	baseline = spools(ctx, db)
+	mine := []string{"ZNWCP", "ZNWCL"}
+	defer func() {
+		out("== control cleanup")
+		for _, m := range mine {
+			_ = cl(ctx, db, "DLTPGM PGM("+lib+"/"+m+")")
+			_ = cl(ctx, db, "RMVM FILE("+lib+"/QCBLLESRC) MBR("+m+")")
+		}
+		_ = cl(ctx, db, "DLTF FILE("+lib+"/SPLOUT)")
+		for k, s := range spools(ctx, db) {
+			if _, ok := baseline[k]; !ok {
+				_ = cl(ctx, db, "DLTSPLF FILE("+s.name+") JOB("+s.job+") SPLNBR("+s.num+")")
+			}
+		}
+		dump(ctx, db, objQ)
+		dump(ctx, db, "SELECT SYSTEM_TABLE_NAME, SYSTEM_TABLE_MEMBER FROM QSYS2.SYSPARTITIONSTAT WHERE SYSTEM_TABLE_SCHEMA = '"+lib+"' ORDER BY 1, 2")
+		dump(ctx, db, splQ)
+	}()
+	if cl(ctx, db, "CRTPF FILE("+lib+"/SPLOUT) RCDLEN(133)") != nil {
+		return
+	}
+	for _, m := range mine {
+		if member(ctx, db, "QCBLLESRC", m, "CBLLE", filepath.Join(srcdir, "qcbllesrc", strings.ToLower(m)+".cblle")) != nil {
+			return
+		}
+		if cl(ctx, db, "CRTBNDCBL PGM("+lib+"/"+m+") SRCFILE("+lib+"/QCBLLESRC) SRCMBR("+m+")") != nil {
+			return
+		}
+		before := spools(ctx, db)
+		_ = cl(ctx, db, "OVRPRTF FILE(QSYSPRT) PAGESIZE(66 132) LPI(6) CPI(10) FORMTYPE(INVOICE) SPLFNAME(NWINVOICE) HOLD(*YES) SHARE(*NO) OVRSCOPE(*JOB)")
+		_ = cl(ctx, db, "CALL PGM("+lib+"/"+m+")")
+		_ = cl(ctx, db, "DLTOVR FILE(QSYSPRT) LVL(*JOB)")
+		for k, s := range spools(ctx, db) {
+			if _, ok := before[k]; ok || s.name != "NWINVOICE" {
+				continue
+			}
+			dump(ctx, db, "SELECT TOTAL_PAGES FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC WHERE JOB_NAME = '"+s.job+"' AND SPOOLED_FILE_NAME = 'NWINVOICE' AND FILE_NUMBER = "+s.num)
+			if cl(ctx, db, "CPYSPLF FILE(NWINVOICE) TOFILE("+lib+"/SPLOUT) JOB("+s.job+") SPLNBR("+s.num+") MBROPT(*REPLACE) CTLCHAR(*FCFC)") != nil {
+				continue
+			}
+			rs, _ := rows(ctx, db, "SELECT SPLOUT FROM "+lib+".SPLOUT ORDER BY RRN(SPLOUT)")
+			var b strings.Builder
+			for _, r := range rs {
+				b.WriteString(r[0] + "\n")
+			}
+			_ = os.WriteFile(filepath.Join(outdir, "control-"+m+".fcfc.ebcdic"), []byte(b.String()), 0o644)
+			out("  %s: %d lines", m, len(rs))
+		}
+	}
+}

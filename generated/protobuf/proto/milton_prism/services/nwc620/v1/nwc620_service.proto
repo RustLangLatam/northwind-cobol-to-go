@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package milton_prism.services.nwc620.v1;
+
+option cc_enable_arenas = true;
+option csharp_namespace = "MiltonPrism.Services.Nwc620.V1";
+option go_package = "milton_prism/pkg/pb/gen/milton_prism/services/nwc620/v1;nwc620";
+option java_multiple_files = true;
+option java_outer_classname = "Nwc620ServiceProtoV1";
+option java_package = "com.miltonprism.services.nwc620.v1";
+option objc_class_prefix = "MPR";
+
+// Nwc620Service prints one invoice (ported from the ILE COBOL program NWC620,
+// called by the CL program NWC620C with the printer file overridden to the
+// INVOICE form type).
+//
+// COBOL is route-less: this contract is interface-derived, not route-derived.
+service Nwc620Service {
+  // Nwc620 prints the invoice of one order: page headings, one line per order
+  // detail line, the items total, the freight and the total due
+  // (PROCEDURE DIVISION USING LK-ORD-NO).
+  rpc Nwc620(Nwc620Request) returns (Nwc620Response) {}
+}
+
+// Nwc620Request is the LINKAGE SECTION of NWC620.
+message Nwc620Request {
+  // cobol=LK-ORD-NO PIC S9(7) COMP-3 byte_len=4 (COBOL digits=7).
+  // The order number to print; an existing order is 1 to 9999999.
+  sint32 lk_ord_no = 1;
+}
+
+// Nwc620Response reports the outcome of the call.
+message Nwc620Response {
+  // Execution status (COBOL RETURN-CODE equivalent).
+  string status = 1;
+  // cobol=LK-ORD-NO PIC S9(7) COMP-3 byte_len=4 (COBOL digits=7), echoed back
+  // (a CALLed program may change its USING/LINKAGE items in place).
+  sint32 lk_ord_no = 2;
+}

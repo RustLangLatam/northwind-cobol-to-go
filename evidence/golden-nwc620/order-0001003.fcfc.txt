@@ -1,0 +1,104 @@
+1                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+1NORTHWIND TRADERS - DALLAS                                                                          INVOICE   PAGE     1            
+ 2101 COMMERCE ST.  DALLAS TX 75201                                                                  DATE  11/24/26                  
+0ORDER NO.    1003     ORDERED   01/01/00     SHIP VIA  SHIPPER DESCRIPTION LONGER THA                                               
+0SOLD TO   C0001 SYNTHETIC SUPPLY CO                         SHIP TO   SHIP NAME THREE                                               
+                 100 TEST AVENUE                                       3 DOCK ROAD                                                   
+                 TESTVILLE       TESTLAND                              PORTTOWN        TESTLAND                                      
+0LN  PROD#  DESCRIPTION                                QTY     UNIT PRICE  DISC      EXTENDED                                        
+   1     1  WIDGET ALPHA                                  1          1.25    0%           1.25                                       
+   2     2  WIDGET BETA                                   2          1.25    0%           2.50                                       
+   3     3  GADGET GAMMA                                  3          1.25    0%           3.75                                       
+   4     1  WIDGET ALPHA                                  4          1.25    0%           5.00                                       
+   5     2  WIDGET BETA                                   5          1.25    0%           6.25                                       
+   6     3  GADGET GAMMA                                  6          1.25    0%           7.50                                       
+   7     1  WIDGET ALPHA                                  7          1.25    0%           8.75                                       
+   8     2  WIDGET BETA                                   8          1.25    0%          10.00                                       
+   9     3  GADGET GAMMA                                  9          1.25    0%          11.25                                       
+  10     1  WIDGET ALPHA                                 10          1.25    0%          12.50                                       
+  11     2  WIDGET BETA                                  11          1.25    0%          13.75                                       
+  12     3  GADGET GAMMA                                 12          1.25    0%          15.00                                       
+  13     1  WIDGET ALPHA                                 13          1.25    0%          16.25                                       
+  14     2  WIDGET BETA                                  14          1.25    0%          17.50                                       
+  15     3  GADGET GAMMA                                 15          1.25    0%          18.75                                       
+  16     1  WIDGET ALPHA                                 16          1.25    0%          20.00                                       
+  17     2  WIDGET BETA                                  17          1.25    0%          21.25                                       
+  18     3  GADGET GAMMA                                 18          1.25    0%          22.50                                       
+  19     1  WIDGET ALPHA                                 19          1.25    0%          23.75                                       
+  20     2  WIDGET BETA                                  20          1.25    0%          25.00                                       
+  21     3  GADGET GAMMA                                 21          1.25    0%          26.25                                       
+  22     1  WIDGET ALPHA                                 22          1.25    0%          27.50                                       
+  23     2  WIDGET BETA                                  23          1.25    0%          28.75                                       
+  24     3  GADGET GAMMA                                 24          1.25    0%          30.00                                       
+  25     1  WIDGET ALPHA                                 25          1.25    0%          31.25                                       
+  26     2  WIDGET BETA                                  26          1.25    0%          32.50                                       
+  27     3  GADGET GAMMA                                 27          1.25    0%          33.75                                       
+  28     1  WIDGET ALPHA                                 28          1.25    0%          35.00                                       
+  29     2  WIDGET BETA                                  29          1.25    0%          36.25                                       
+  30     3  GADGET GAMMA                                 30          1.25    0%          37.50                                       
+  31     1  WIDGET ALPHA                                 31          1.25    0%          38.75                                       
+  32     2  WIDGET BETA                                  32          1.25    0%          40.00                                       
+  33     3  GADGET GAMMA                                 33          1.25    0%          41.25                                       
+  34     1  WIDGET ALPHA                                 34          1.25    0%          42.50                                       
+  35     2  WIDGET BETA                                  35          1.25    0%          43.75                                       
+  36     3  GADGET GAMMA                                 36          1.25    0%          45.00                                       
+  37     1  WIDGET ALPHA                                 37          1.25    0%          46.25                                       
+  38     2  WIDGET BETA                                  38          1.25    0%          47.50                                       
+  39     3  GADGET GAMMA                                 39          1.25    0%          48.75                                       
+  40     1  WIDGET ALPHA                                 40          1.25    0%          50.00                                       
+  41     2  WIDGET BETA                                  41          1.25    0%          51.25                                       
+  42     3  GADGET GAMMA                                 42          1.25    0%          52.50                                       
+  43     1  WIDGET ALPHA                                 43          1.25    0%          53.75                                       
+  44     2  WIDGET BETA                                  44          1.25    0%          55.00                                       
+  45     3  GADGET GAMMA                                 45          1.25    0%          56.25                                       
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+1NORTHWIND TRADERS - DALLAS                                                                          INVOICE   PAGE     2            
+ 2101 COMMERCE ST.  DALLAS TX 75201                                                                  DATE  11/24/26                  
+0ORDER NO.    1003     ORDERED   01/01/00     SHIP VIA  SHIPPER DESCRIPTION LONGER THA                                               
+0SOLD TO   C0001 SYNTHETIC SUPPLY CO                         SHIP TO   SHIP NAME THREE                                               
+                 100 TEST AVENUE                                       3 DOCK ROAD                                                   
+                 TESTVILLE       TESTLAND                              PORTTOWN        TESTLAND                                      
+0LN  PROD#  DESCRIPTION                                QTY     UNIT PRICE  DISC      EXTENDED                                        
+  46     1  WIDGET ALPHA                                 46          1.25    0%          57.50                                       
+0                                                                ITEMS                1,351.25                                       
+                                                                 FREIGHT                 12.00                                       
+0                                                                TOTAL DUE            1,363.25                                       
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       

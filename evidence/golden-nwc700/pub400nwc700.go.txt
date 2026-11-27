@@ -1,0 +1,402 @@
+// pub400nwc700: build the OPM COBOL/400 program NWC700 on PUB400 in PRISMIA1, run it on
+// synthetic CUSMST data sets, copy each spooled report (CPYSPLF CTLCHAR(*FCFC)) to local
+// golden files, then drop everything.
+// Usage: pub400nwc700 probe | run <srcdir> <outdir> | csv <outdir> | cleanup
+// Every output line goes through out(), which scrubs the password as a last guard.
+package main
+
+import (
+	"bufio"
+	"context"
+	"database/sql"
+	"encoding/csv"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"milton_prism/pkg/db2access"
+	"milton_prism/pkg/db2access/ibmi"
+	_ "milton_prism/pkg/db2access/ibmi/i400conn"
+)
+
+const lib = "PRISMIA1"
+
+var pw string
+
+func out(format string, a ...any) {
+	s := fmt.Sprintf(format, a...)
+	if pw != "" {
+		s = strings.ReplaceAll(s, pw, "[redacted]")
+	}
+	fmt.Println(s)
+}
+
+func readPW() string {
+	home, _ := os.UserHomeDir()
+	f, err := os.Open(filepath.Join(home, "<password-file>"))
+	if err != nil {
+		fmt.Println("cannot open the credential file")
+		os.Exit(2)
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	if !sc.Scan() {
+		fmt.Println("credential file has no first line")
+		os.Exit(2)
+	}
+	return strings.TrimSpace(sc.Text())
+}
+
+// ---- fixture -------------------------------------------------------------------
+
+// Customer is one CUSMST row. Columns not listed keep their defaults (blanks, zeros).
+type Customer struct{ Cust, Name, Cont, Addr, City, Cnty, Phon, Stat string }
+
+// Edge exercises the sort keys (EBCDIC order: blank < lower case < upper case < digits),
+// the country break from HIGH-VALUES, blank fields, maximum lengths, status D and equal keys.
+// C0001 and C0002 are the NWC620 golden's CUSMST rows.
+var Edge = []Customer{
+	{"C0001", "SYNTHETIC SUPPLY CO", "", "100 TEST AVENUE", "TESTVILLE", "TESTLAND", "", ""},
+	{"C0002", "LONGNAME CUSTOMER WHOSE NAME FILLS FORTY", "", "1234567890123456789012345678901234567890ABCDEFGHIJKLMNOPQRST", "FIFTEENCHARCITY", "FIFTEENCHARCNTY", "", ""},
+	{"C0003", "BLANK COUNTRY CO", "BLANK CITY TOO", "", "", "", "000-0000", ""},
+	{"C0004", "", "", "", "", "", "", ""},
+	{"C0005", "DELETED STATUS CO", "STATUS D IS PRINTED", "", "TESTVILLE", "TESTLAND", "111-1111", "D"},
+	{"C0006", "LOWER CASE COUNTRY CO", "", "", "testville", "testland", "", ""},
+	{"C0007", "DIGIT CITY CO", "", "", "1ST CITY", "TESTLAND", "", ""},
+	{"C0009", "TIE CO", "INSERTED FIRST", "", "TESTVILLE", "TESTLAND", "", ""},
+	{"C0008", "TIE CO", "INSERTED SECOND", "", "TESTVILLE", "TESTLAND", "", ""},
+	{"C0010", "MAXIMUM LENGTH FIELDS CO 1234567890ABCDE", "CONTACT NAME FILLS THIRTY XXXX", "", "CITYFIFTEENXXXX", "TESTLAND", "+00 (000) 000-0000 X1234", "O"},
+	{"C0011", "lower case name co", "", "", "TESTVILLE", "TESTLAND", "", ""},
+}
+
+// Pages drives every heading branch: country AA ends at line count 53, so its break
+// writes TL1 and then forces a new page (> 50); BB overflows mid-country (> 55) on its
+// 52nd detail; CC ends at line count 56, so the grand total goes to a new page.
+var Pages = func() []Customer {
+	var cs []Customer
+	for _, g := range []struct {
+		cnty, pfx string
+		n         int
+	}{{"AAPAGELAND", "A", 48}, {"BBPAGELAND", "B", 52}, {"CCPAGELAND", "C", 48}} {
+		for i := 1; i <= g.n; i++ {
+			cs = append(cs, Customer{fmt.Sprintf("%s%04d", g.pfx, i), fmt.Sprintf("PAGE CUSTOMER %s%03d", g.pfx, i),
+				"", "", "PAGECITY", g.cnty, "", ""})
+		}
+	}
+	return cs
+}()
+
+var scenarios = []struct {
+	name string
+	rows []Customer
+}{{"edge", Edge}, {"empty", nil}, {"pages", Pages}}
+
+// Q quotes an SQL character literal.
+func Q(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+func writeCSV(dir string) {
+	for _, s := range scenarios {
+		f, err := os.Create(filepath.Join(dir, "input-cusmst-"+s.name+".csv"))
+		if err != nil {
+			panic(err)
+		}
+		w := csv.NewWriter(f)
+		_ = w.Write([]string{"CMCUST", "CMNAME", "CMCONT", "CMADDR", "CMCITY", "CMCNTY", "CMPHON", "CMSTAT"})
+		for _, c := range s.rows {
+			_ = w.Write([]string{c.Cust, c.Name, c.Cont, c.Addr, c.City, c.Cnty, c.Phon, c.Stat})
+		}
+		w.Flush()
+		f.Close()
+	}
+}
+
+// ---- host helpers --------------------------------------------------------------
+
+func cl(ctx context.Context, db *sql.DB, cmd string) error {
+	out("CL> %s", cmd)
+	_, err := db.ExecContext(ctx, "CALL QSYS2.QCMDEXC('"+strings.ReplaceAll(cmd, "'", "''")+"')")
+	if err != nil {
+		out("  FAILED: %v", err)
+	}
+	return err
+}
+
+func exec(ctx context.Context, db *sql.DB, q string) error {
+	_, err := db.ExecContext(ctx, q)
+	if err != nil {
+		out("  SQL FAILED %q: %v", q, err)
+	}
+	return err
+}
+
+func rows(ctx context.Context, db *sql.DB, q string) ([][]string, error) {
+	rs, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	cols, _ := rs.Columns()
+	var res [][]string
+	for rs.Next() {
+		v := make([]sql.NullString, len(cols))
+		p := make([]any, len(cols))
+		for i := range v {
+			p[i] = &v[i]
+		}
+		if err := rs.Scan(p...); err != nil {
+			return res, err
+		}
+		r := make([]string, len(cols))
+		for i, x := range v {
+			if x.Valid {
+				r[i] = x.String
+			} else {
+				r[i] = "<NULL>"
+			}
+		}
+		res = append(res, r)
+	}
+	return res, rs.Err()
+}
+
+func dump(ctx context.Context, db *sql.DB, q string) {
+	rs, err := rows(ctx, db, q)
+	if err != nil {
+		out("  QUERY FAILED: %v", err)
+	}
+	for _, r := range rs {
+		for i := range r {
+			r[i] = strings.TrimRight(r[i], " ")
+		}
+		out("  %s", strings.Join(r, " | "))
+	}
+}
+
+const objQ = "SELECT OBJNAME, OBJTYPE, OBJATTRIBUTE FROM TABLE(QSYS2.OBJECT_STATISTICS('" + lib + "', '*ALL')) ORDER BY OBJNAME"
+const mbrQ = "SELECT SYSTEM_TABLE_NAME, SYSTEM_TABLE_MEMBER FROM QSYS2.SYSPARTITIONSTAT WHERE SYSTEM_TABLE_SCHEMA = '" + lib + "' ORDER BY 1, 2"
+const splQ = "SELECT SPOOLED_FILE_NAME, JOB_NAME, FILE_NUMBER, TOTAL_PAGES, STATUS, OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, CREATE_TIMESTAMP FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC WHERE USER_NAME = 'PRISMIA' ORDER BY CREATE_TIMESTAMP"
+
+func open() (*sql.DB, context.Context, context.CancelFunc) {
+	pw = readPW()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	db, err := ibmi.Driver{}.Open(db2access.Config{Host: "pub400.com", User: "PRISMIA",
+		Password: db2access.Secret(pw), Library: lib, CommitMode: db2access.CommitNone})
+	if err != nil {
+		out("FATAL open: %v", err)
+		os.Exit(1)
+	}
+	db.SetMaxOpenConns(1) // one server job: the library list lives in it
+	return db, ctx, cancel
+}
+
+func state(ctx context.Context, db *sql.DB) {
+	out("== objects in %s", lib)
+	dump(ctx, db, objQ)
+	out("== members in %s", lib)
+	dump(ctx, db, mbrQ)
+	out("== spooled files of PRISMIA")
+	dump(ctx, db, splQ)
+}
+
+func probe(ctx context.Context, db *sql.DB) {
+	dump(ctx, db, "SELECT CURRENT USER, CURRENT SCHEMA, CURRENT TIMESTAMP, CURRENT SERVER FROM SYSIBM.SYSDUMMY1")
+
+	dump(ctx, db, "SELECT SYSTEM_SCHEMA_NAME, TYPE FROM QSYS2.LIBRARY_LIST_INFO ORDER BY ORDINAL_POSITION")
+	out("== compilers")
+	dump(ctx, db, "SELECT OBJNAME, OBJTYPE FROM TABLE(QSYS2.OBJECT_STATISTICS('QSYS', '*CMD', 'CRTCBLPGM')) X")
+	dump(ctx, db, "SELECT OBJNAME, OBJTYPE FROM TABLE(QSYS2.OBJECT_STATISTICS('QSYS', '*CMD', 'CRTBNDCBL')) X")
+	out("== QSYSPRT attributes")
+	dump(ctx, db, "SELECT OBJNAME, OBJTYPE, OBJLIB FROM TABLE(QSYS2.OBJECT_STATISTICS('*LIBL', '*FILE', 'QSYSPRT')) X")
+	state(ctx, db)
+}
+
+type spl struct{ name, job, num string }
+
+func spools(ctx context.Context, db *sql.DB) map[string]spl {
+	rs, err := rows(ctx, db, splQ)
+	if err != nil {
+		out("  spool query failed: %v", err)
+	}
+	m := map[string]spl{}
+	for _, r := range rs {
+		s := spl{strings.TrimSpace(r[0]), strings.TrimSpace(r[1]), strings.TrimSpace(r[2])}
+		m[s.job+"#"+s.name+"#"+s.num] = s
+	}
+	return m
+}
+
+var baseline = map[string]spl{}
+
+// member creates a source member and fills it from a local file (80-column cards).
+func member(ctx context.Context, db *sql.DB, srcf, mbr, typ, path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := cl(ctx, db, "ADDPFM FILE("+lib+"/"+srcf+") MBR("+mbr+") SRCTYPE("+typ+")"); err != nil {
+		return err
+	}
+	alias := lib + ".ZZALIAS"
+	if err := exec(ctx, db, "CREATE ALIAS "+alias+" FOR "+lib+"."+srcf+"("+mbr+")"); err != nil {
+		return err
+	}
+	defer exec(ctx, db, "DROP ALIAS "+alias)
+	for i, l := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if len(l) > 80 {
+			return fmt.Errorf("%s line %d longer than 80", path, i+1)
+		}
+		if err := exec(ctx, db, fmt.Sprintf("INSERT INTO %s (SRCSEQ, SRCDAT, SRCDTA) VALUES (%d, 0, %s)", alias, i+1, Q(l))); err != nil {
+			return err
+		}
+	}
+	out("  %s/%s(%s) loaded", lib, srcf, mbr)
+	return nil
+}
+
+func load(ctx context.Context, db *sql.DB, cs []Customer) error {
+	if err := exec(ctx, db, "DELETE FROM "+lib+".CUSMST"); err != nil {
+		return err
+	}
+	for _, c := range cs { // one INSERT per row keeps arrival sequence = fixture order
+		if err := exec(ctx, db, fmt.Sprintf("INSERT INTO %s.CUSMST (CMCUST, CMNAME, CMCONT, CMADDR, CMCITY, CMCNTY, CMPHON, CMSTAT) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+			lib, Q(c.Cust), Q(c.Name), Q(c.Cont), Q(c.Addr), Q(c.City), Q(c.Cnty), Q(c.Phon), Q(c.Stat))); err != nil {
+			return err
+		}
+	}
+	dump(ctx, db, "SELECT 'CUSMST', COUNT(*) FROM "+lib+".CUSMST")
+	return nil
+}
+
+func listing(ctx context.Context, db *sql.DB, before map[string]spl) {
+	for k, s := range spools(ctx, db) {
+		if _, ok := before[k]; ok {
+			continue
+		}
+		out("  compile spooled file: %s %s %s", s.name, s.job, s.num)
+		dump(ctx, db, "SELECT SPOOLED_DATA FROM TABLE(SYSTOOLS.SPOOLED_FILE_DATA(JOB_NAME => '"+s.job+"', SPOOLED_FILE_NAME => '"+s.name+"', SPOOLED_FILE_NUMBER => "+s.num+")) X WHERE SPOOLED_DATA LIKE '%LBL%' OR SPOOLED_DATA LIKE '%Message Summary%' OR SPOOLED_DATA LIKE '%NWC700%created%' OR SPOOLED_DATA LIKE '%Program NWC700%'")
+	}
+}
+
+func runAll(ctx context.Context, db *sql.DB, srcdir, outdir string) {
+	baseline = spools(ctx, db)
+	out("baseline: %d spooled files of PRISMIA before the run", len(baseline))
+	state(ctx, db)
+	defer cleanup(ctx, db)
+
+	_ = cl(ctx, db, "ADDLIBLE LIB("+lib+")") // already in the list is fine
+	// Our own source files: the DDS in ZNWDDS, the OPM COBOL source in ZNWCBL.
+	if cl(ctx, db, "CRTSRCPF FILE("+lib+"/ZNWDDS) RCDLEN(92)") != nil {
+		return
+	}
+	if cl(ctx, db, "CRTSRCPF FILE("+lib+"/ZNWCBL) RCDLEN(92)") != nil {
+		return
+	}
+	if member(ctx, db, "ZNWDDS", "CUSMST", "PF", filepath.Join(srcdir, "qddssrc", "cusmst.pf")) != nil {
+		return
+	}
+	if cl(ctx, db, "CRTPF FILE("+lib+"/CUSMST) SRCFILE("+lib+"/ZNWDDS) SRCMBR(CUSMST)") != nil {
+		return
+	}
+	dump(ctx, db, "SELECT COLUMN_NAME, DATA_TYPE, LENGTH, NUMERIC_SCALE FROM QSYS2.SYSCOLUMNS WHERE TABLE_SCHEMA = '"+lib+"' AND TABLE_NAME = 'CUSMST' ORDER BY ORDINAL_POSITION")
+	dump(ctx, db, "SELECT TABLE_NAME, ROW_LENGTH FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = '"+lib+"' AND TABLE_NAME = 'CUSMST'")
+	if member(ctx, db, "ZNWCBL", "NWC700", "CBL", filepath.Join(srcdir, "qcblsrc", "nwc700.cbl")) != nil {
+		return
+	}
+	before := spools(ctx, db)
+	// As setup/nwcbuild.clle: CRTCBLPGM (OPM COBOL/400), not CRTBNDCBL.
+	cerr := cl(ctx, db, "CRTCBLPGM PGM("+lib+"/NWC700) SRCFILE("+lib+"/ZNWCBL) SRCMBR(NWC700) REPLACE(*YES)")
+	listing(ctx, db, before)
+	if cerr != nil {
+		return
+	}
+	dump(ctx, db, "SELECT OBJNAME, OBJTYPE, OBJATTRIBUTE FROM TABLE(QSYS2.OBJECT_STATISTICS('"+lib+"', '*PGM', 'NWC700')) X")
+	if cl(ctx, db, "CRTPF FILE("+lib+"/SPLOUT) RCDLEN(133)") != nil {
+		return
+	}
+	dump(ctx, db, "SELECT CURRENT TIMESTAMP FROM SYSIBM.SYSDUMMY1")
+	for _, sc := range scenarios {
+		out("== scenario %s: %d CUSMST rows", sc.name, len(sc.rows))
+		if load(ctx, db, sc.rows) != nil {
+			return
+		}
+		before := spools(ctx, db)
+		// NWC700C submits CALL PGM(NWLCBL/NWC700) with no OVRPRTF: QSYSPRT as shipped.
+		if cl(ctx, db, "CALL PGM("+lib+"/NWC700)") != nil {
+			return
+		}
+		var got []spl
+		for k, s := range spools(ctx, db) {
+			if _, ok := before[k]; !ok {
+				got = append(got, s)
+			}
+		}
+		out("scenario %s: %d new spooled file(s) %v", sc.name, len(got), got)
+		for _, s := range got {
+			dump(ctx, db, "SELECT SPOOLED_FILE_NAME, TOTAL_PAGES, SIZE, FORM_TYPE, STATUS, PAGE_LENGTH, PAGE_WIDTH, LINES_PER_INCH, CHARACTERS_PER_INCH, USER_DATA FROM QSYS2.OUTPUT_QUEUE_ENTRIES WHERE JOB_NAME = '"+s.job+"' AND SPOOLED_FILE_NAME = '"+s.name+"' AND FILE_NUMBER = "+s.num)
+			if cl(ctx, db, "CPYSPLF FILE("+s.name+") TOFILE("+lib+"/SPLOUT) JOB("+s.job+") SPLNBR("+s.num+") MBROPT(*REPLACE) CTLCHAR(*FCFC)") != nil {
+				continue
+			}
+			rs, err := rows(ctx, db, "SELECT SPLOUT FROM "+lib+".SPLOUT ORDER BY RRN(SPLOUT)")
+			if err != nil {
+				out("  read SPLOUT: %v", err)
+				continue
+			}
+			var b strings.Builder
+			for _, r := range rs {
+				b.WriteString(r[0])
+				b.WriteString("\n")
+			}
+			p := filepath.Join(outdir, "nwc700-"+sc.name+".fcfc.txt")
+			if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
+				out("  write %s: %v", p, err)
+			}
+			out("  %d lines -> %s", len(rs), filepath.Base(p))
+		}
+	}
+	dump(ctx, db, "SELECT CURRENT TIMESTAMP FROM SYSIBM.SYSDUMMY1")
+}
+
+func cleanup(ctx context.Context, db *sql.DB) {
+	out("== cleanup")
+	_ = exec(ctx, db, "DROP ALIAS "+lib+".ZZALIAS")
+	_ = cl(ctx, db, "DLTPGM PGM("+lib+"/NWC700)")
+	for _, f := range []string{"SPLOUT", "CUSMST", "ZNWDDS", "ZNWCBL"} {
+		_ = cl(ctx, db, "DLTF FILE("+lib+"/"+f+")")
+	}
+	// Every spooled file of PRISMIA not in the baseline was created by this run.
+	for k, s := range spools(ctx, db) {
+		if _, ok := baseline[k]; ok {
+			continue
+		}
+		_ = cl(ctx, db, "DLTSPLF FILE("+s.name+") JOB("+s.job+") SPLNBR("+s.num+")")
+	}
+	out("== after cleanup")
+	state(ctx, db)
+	dump(ctx, db, "SELECT COUNT(*) FROM QSYS2.OUTPUT_QUEUE_ENTRIES WHERE USER_NAME = 'PRISMIA'")
+	dump(ctx, db, "SELECT COUNT(*) FROM QSYS2.SYSPARTITIONSTAT WHERE SYSTEM_TABLE_SCHEMA = '"+lib+"'")
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("usage: probe | run <srcdir> <outdir> | csv <outdir> | cleanup")
+		os.Exit(2)
+	}
+	if os.Args[1] == "csv" {
+		writeCSV(os.Args[2])
+		return
+	}
+	db, ctx, cancel := open()
+	defer cancel()
+	defer db.Close()
+	switch os.Args[1] {
+	case "probe":
+		probe(ctx, db)
+	case "run":
+		runAll(ctx, db, os.Args[2], os.Args[3])
+	case "cleanup":
+		baseline = spools(ctx, db) // only drops objects; spooled files need a baseline from run
+		cleanup(ctx, db)
+	}
+}

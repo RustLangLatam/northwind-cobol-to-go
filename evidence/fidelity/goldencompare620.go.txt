@@ -1,0 +1,278 @@
+// goldencompare620 (this two-service build): feeds the PUB400 fixture CSVs to the attested NWC620
+// service through an in-memory ports.InvoiceRepository, writes the spool with the
+// production printer.DirPrinter and compares the bytes, page and line of every record
+// with the golden FCFC files of the ILE COBOL run.
+//
+// Adapted from the earlier one-service build's goldencompare.go.txt to
+// the API of this build (see the NWC620 changes in evidence/fidelity/README.md). The comparison rules are unchanged.
+// Usage: goldencompare620 <golden dir>
+package main
+
+import (
+	"context"
+	"encoding/csv"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	cobolnum "github.com/RustLangLatam/cobolnum-go"
+
+	"milton_prism/core/services/nwc620/application"
+	"milton_prism/core/services/nwc620/domain"
+	"milton_prism/core/services/nwc620/infrastructure/printer"
+	"milton_prism/core/shared/domainerr"
+	"milton_prism/core/shared/svcruntime"
+)
+
+const footer = "-=* https://pub400.com *=-"
+
+var orders = []int64{1001, 1002, 1003, 1004, 1006, 1007, 9999999}
+
+// CHAR widths of the DDS (repositories/tables.go): Db2 returns CHAR blank padded, so
+// the in-memory repository does the same.
+var width = map[string]int{"OHCUST": 5, "OHSHPV": 1, "OHSNAM": 40, "OHSADR": 60, "OHSCTY": 15, "OHSCNT": 15,
+	"CMNAME": 40, "CMADDR": 60, "CMCITY": 15, "CMCNTY": 15, "CTDESC": 60, "PMNAME": 40}
+
+func pad(col, s string) string { return s + strings.Repeat(" ", max(0, width[col]-len(s))) }
+
+type repo struct {
+	hdrs  map[string]domain.OrderHeader
+	custs map[string]domain.Customer
+	codes map[string]string
+	lines map[string][]domain.OrderLine
+	prds  map[string]string
+}
+
+func rows(dir, name string) [][]string {
+	f, err := os.Open(filepath.Join(dir, name))
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	r, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		panic(err)
+	}
+	return r[1:]
+}
+
+func dec(p cobolnum.Pic, s string) cobolnum.Dec {
+	d, sizeErr, err := p.ParseDec(s, cobolnum.Truncation)
+	if err != nil || sizeErr {
+		panic(fmt.Sprintf("value %q does not fit: %v", s, err))
+	}
+	return d
+}
+
+func k(d cobolnum.Dec) string {
+	n, _ := strconv.Atoi(strings.TrimSpace(d.Plain()))
+	return strconv.Itoa(n)
+}
+func t(s string) string { return strings.TrimRight(s, " ") }
+
+func load(dir string) *repo {
+	r := &repo{hdrs: map[string]domain.OrderHeader{}, custs: map[string]domain.Customer{},
+		codes: map[string]string{}, lines: map[string][]domain.OrderLine{}, prds: map[string]string{}}
+	for _, c := range rows(dir, "input-cusmst.csv") {
+		r.custs[c[0]] = domain.Customer{Name: pad("CMNAME", c[1]), Address: pad("CMADDR", c[2]),
+			City: pad("CMCITY", c[3]), Country: pad("CMCNTY", c[4])}
+	}
+	for _, c := range rows(dir, "input-codtbl.csv") {
+		r.codes[c[0]+"|"+c[1]] = pad("CTDESC", c[2])
+	}
+	for _, p := range rows(dir, "input-prdmst.csv") {
+		r.prds[p[0]] = pad("PMNAME", p[1])
+	}
+	for _, h := range rows(dir, "input-ordhdr.csv") {
+		r.hdrs[h[0]] = domain.OrderHeader{OrderNo: dec(domain.PicOrderNo, h[0]), Customer: pad("OHCUST", h[1]),
+			OrderDate: dec(domain.PicDate7, h[2]), ShipVia: pad("OHSHPV", h[3]), Freight: dec(domain.PicFreight, h[4]),
+			ShipName: pad("OHSNAM", h[5]), ShipAddress: pad("OHSADR", h[6]), ShipCity: pad("OHSCTY", h[7]),
+			ShipCountry: pad("OHSCNT", h[8]), Total: dec(domain.PicTotal, h[9])}
+	}
+	for _, l := range rows(dir, "input-orddtl.csv") {
+		r.lines[l[0]] = append(r.lines[l[0]], domain.OrderLine{LineNo: dec(domain.PicLineNo, l[1]),
+			ProductNo: dec(domain.PicProductNo, l[2]), Qty: dec(domain.PicQty, l[3]),
+			Price: dec(domain.PicPrice, l[4]), Disc: dec(domain.PicDisc, l[5]), Extended: dec(domain.PicExt, l[6])})
+	}
+	return r
+}
+
+func (r *repo) GetOrderHeader(_ context.Context, o cobolnum.Dec) (domain.OrderHeader, bool, error) {
+	h, ok := r.hdrs[k(o)]
+	return h, ok, nil
+}
+func (r *repo) GetCustomer(_ context.Context, c string) (domain.Customer, bool, error) {
+	x, ok := r.custs[t(c)]
+	return x, ok, nil
+}
+func (r *repo) GetCodeDescription(_ context.Context, ty, c string) (string, bool, error) {
+	x, ok := r.codes[t(ty)+"|"+t(c)]
+	return x, ok, nil
+}
+func (r *repo) ListOrderLines(_ context.Context, o cobolnum.Dec) ([]domain.OrderLine, error) {
+	var out []domain.OrderLine
+	for _, l := range r.lines[k(o)] {
+		if n, _ := strconv.Atoi(k(l.LineNo)); n >= 0 {
+			out = append(out, l)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, _ := strconv.Atoi(k(out[i].LineNo))
+		b, _ := strconv.Atoi(k(out[j].LineNo))
+		return a < b
+	})
+	return out, nil
+}
+func (r *repo) GetProductName(_ context.Context, p cobolnum.Dec) (string, bool, error) {
+	x, ok := r.prds[k(p)]
+	return x, ok, nil
+}
+
+type noMetrics struct{}
+
+func (noMetrics) InvoicePrinted() {}
+func (noMetrics) OrderNotFound()  {}
+
+// --- comparison: the goldencompare rules, unchanged ---
+
+type rec struct {
+	page, line int
+	ctl        byte
+	text       string
+}
+
+func (r rec) String() string { return fmt.Sprintf("p%d l%02d |%c%s|", r.page, r.line, r.ctl, r.text) }
+
+// streamRecords parses the production print stream: control run ('\f' or n '\n') then
+// 132 bytes. The stream starts at page 1 line 1.
+func streamRecords(s string) (recs []rec) {
+	page, line, i := 1, 1, 0
+	for i < len(s) {
+		c := byte('?')
+		switch {
+		case s[i] == '\f':
+			c, page, line = '1', page+1, 1
+			i++
+		case s[i] == '\n':
+			n := 0
+			for i < len(s) && s[i] == '\n' {
+				n++
+				i++
+			}
+			line += n
+			c = map[int]byte{1: ' ', 2: '0', 3: '-'}[n]
+			if i >= len(s) { // the document's closing line feed, not a record
+				return
+			}
+		}
+		end := min(i+domain.PrintRecordLength, len(s))
+		recs = append(recs, rec{page, line, c, s[i:end]})
+		i = end
+	}
+	return
+}
+
+func goldenRecords(lines []string) (recs []rec) {
+	page, line := 0, 1
+	for _, l := range lines {
+		c, tx := l[0], l[1:]
+		switch c {
+		case '1':
+			page, line = page+1, 1
+		case ' ':
+			line++
+		case '0':
+			line += 2
+		case '-':
+			line += 3
+		}
+		if strings.TrimSpace(tx) == footer || (c != '1' && strings.TrimSpace(tx) == "") {
+			continue
+		}
+		recs = append(recs, rec{page, line, c, tx})
+	}
+	return
+}
+
+var verdict = map[bool]string{true: "MATCHES", false: "DIFFERS"}
+
+func main() {
+	gdir := os.Args[1]
+	r := load(gdir)
+	loc, _ := time.LoadLocation("America/Chicago")
+	clock := svcruntime.NewClock(loc, func() time.Time { return time.Date(2026, 11, 24, 12, 0, 0, 0, loc) })
+	totalCmp, totalSame, totalDiff := 0, 0, 0
+	for _, n := range orders {
+		sp, _ := os.MkdirTemp("", "spool")
+		svc, err := application.NewService(r, &printer.DirPrinter{Dir: sp, Clock: clock}, clock, noMetrics{})
+		if err != nil {
+			panic(err)
+		}
+		res, err := svc.PrintInvoice(context.Background(), n)
+		files, _ := os.ReadDir(sp)
+		raw, gerr := os.ReadFile(filepath.Join(gdir, fmt.Sprintf("order-%07d.fcfc.txt", n)))
+		if gerr != nil {
+			// ILE: no spooled file. The port of this build answers NotFound (NW2201) instead of a status.
+			ok := len(files) == 0 && domainerr.Is(err, domainerr.NotFound)
+			fmt.Printf("order %d: no golden file (ILE: no spooled file); Go error=%v spooled files=%d (R49 %s)\n",
+				n, err, len(files), verdict[ok])
+			if !ok {
+				totalDiff++
+			}
+			continue
+		}
+		if err != nil {
+			fmt.Printf("order %d: Go error %v\n", n, err)
+			totalDiff++
+			continue
+		}
+		if len(files) != 1 {
+			fmt.Printf("order %d: expected 1 spooled file, got %d\n", n, len(files))
+			totalDiff++
+			continue
+		}
+		b, _ := os.ReadFile(filepath.Join(sp, files[0].Name()))
+		grecs := streamRecords(string(b))
+		crecs := goldenRecords(strings.Split(strings.TrimRight(string(raw), "\n"), "\n"))
+		// IBM i writes the empty page 1 as a blank '1' record; the port writes it as the
+		// stream's leading form feed (first record lands on page 2). Compare the flag,
+		// then the records with identical page numbering.
+		cEmpty := len(crecs) > 0 && crecs[0].ctl == '1' && strings.TrimSpace(crecs[0].text) == ""
+		gEmpty := len(grecs) > 0 && grecs[0].page == 2
+		fmt.Printf("order %d: status=%s spooled file %s, empty leading page COBOL=%v Go=%v (R48 %s)\n", n, res.Status,
+			files[0].Name()[:strings.Index(files[0].Name(), "-2026")], cEmpty, gEmpty, verdict[cEmpty == gEmpty])
+		diffs := 0
+		if cEmpty != gEmpty {
+			diffs++
+		}
+		if cEmpty {
+			crecs = crecs[1:]
+		}
+		cnt := 0
+		for i := 0; i < len(crecs) || i < len(grecs); i++ {
+			var c, g string
+			if i < len(crecs) {
+				c = crecs[i].String()
+			}
+			if i < len(grecs) {
+				g = grecs[i].String()
+			}
+			cnt++
+			if c != g {
+				diffs++
+				fmt.Printf("  order %d rec %d\n    COBOL %s\n    Go    %s\n", n, i+1, c, g)
+			} else {
+				totalSame++
+			}
+		}
+		fmt.Printf("order %d: %d COBOL records, %d Go records, %d differing\n", n, len(crecs), len(grecs), diffs)
+		totalCmp += cnt
+		totalDiff += diffs
+		_ = os.RemoveAll(sp)
+	}
+	fmt.Printf("TOTAL records compared: %d, identical: %d, differing items: %d\n", totalCmp, totalSame, totalDiff)
+}

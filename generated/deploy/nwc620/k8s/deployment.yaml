@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nwc620
+  labels:
+    app: nwc620
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nwc620
+  template:
+    metadata:
+      labels:
+        app: nwc620
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: nwc620
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nwc620
+          image: nwc620:1.0.0-dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: app
+              containerPort: 50051
+            - name: metrics
+              containerPort: 9100
+          envFrom:
+            - configMapRef:
+                name: nwc620-config
+            - secretRef:
+                name: nwc620-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+              ephemeral-storage: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 9100
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9100
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9100
+            periodSeconds: 10
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: dir-spool
+              mountPath: /var/lib/nwc620/spool
+            - name: tls
+              mountPath: /etc/nwc620/tls
+              readOnly: true
+            - name: metrics-token
+              mountPath: /etc/nwc620/metrics
+              readOnly: true
+            - name: db2-ca
+              mountPath: /etc/nwc620/db2-ca
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: dir-spool
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: tls
+          secret:
+            secretName: nwc620-tls
+        - name: metrics-token
+          secret:
+            secretName: nwc620-metrics
+        - name: db2-ca
+          configMap:
+            name: nwc620-db2-ca
+            optional: true

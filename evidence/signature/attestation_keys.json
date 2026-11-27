@@ -1,0 +1,13 @@
+{
+  "attestationKeys":  [
+    {
+      "name":  "attestation_keys/prismia-attest-5162a6cc6121203b",
+      "keyId":  "prismia-attest-5162a6cc6121203b",
+      "algorithm":  "ed25519",
+      "publicKeyHex":  "49a3a1cec98a174f2c8d256e4854da337232cbfe15c427e2861ba01f0c36d2de",
+      "fingerprintSha256":  "5162a6cc6121203b00e27b15df241eb6cb4b3e9227052e1cdc9a8ceba30bbc10",
+      "state":  "ATTESTATION_KEY_STATE_ACTIVE"
+    }
+  ],
+  "nextPageToken":  ""
+}

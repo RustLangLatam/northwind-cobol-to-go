@@ -1,0 +1,67 @@
+# Traffic of nwc700. Ingress: the app port from this namespace (and from the ingress
+# controller's namespace when named); the metrics port only from labelled pods of the
+# "monitoring" namespace (change it to yours). Egress: DNS (kube-dns and NodeLocal DNS),
+# the datastore port and OTLP. Every cidr marked NARROW ME is open to any address on its
+# port: set it to your database and collector addresses before production.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nwc700
+spec:
+  podSelector:
+    matchLabels:
+      app: nwc700
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 50052
+    # Ingress controller in another namespace: to admit it, regenerate with
+    # NetworkPolicyOptions.IngressNamespace or uncomment and set its namespace.
+    # - from:
+    #     - namespaceSelector:
+    #         matchLabels:
+    #           kubernetes.io/metadata.name: ingress-nginx
+    #   ports:
+    #     - protocol: TCP
+    #       port: 50052
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              metrics-scraper: "true"
+      ports:
+        - protocol: TCP
+          port: 9101
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - ipBlock:
+            cidr: 169.254.20.10/32
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0  # NARROW ME: datastore address, e.g. 10.0.12.5/32
+      ports:
+        - protocol: TCP
+          port: 9471
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0  # NARROW ME: OTLP collector address, e.g. 10.0.12.5/32
+      ports:
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 4317

@@ -1,0 +1,211 @@
+1                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+111/25/26            NORTHWIND TRADERS - DALLAS    CUSTOMER LIST BY COUNTRY      PAGE   1                                            
+0CUST   COMPANY                                  CITY            CONTACT                        PHONE                                
+0COUNTRY: AAPAGELAND                                                                                                                 
+ A0001  PAGE CUSTOMER A001                       PAGECITY                                                                            
+ A0002  PAGE CUSTOMER A002                       PAGECITY                                                                            
+ A0003  PAGE CUSTOMER A003                       PAGECITY                                                                            
+ A0004  PAGE CUSTOMER A004                       PAGECITY                                                                            
+ A0005  PAGE CUSTOMER A005                       PAGECITY                                                                            
+ A0006  PAGE CUSTOMER A006                       PAGECITY                                                                            
+ A0007  PAGE CUSTOMER A007                       PAGECITY                                                                            
+ A0008  PAGE CUSTOMER A008                       PAGECITY                                                                            
+ A0009  PAGE CUSTOMER A009                       PAGECITY                                                                            
+ A0010  PAGE CUSTOMER A010                       PAGECITY                                                                            
+ A0011  PAGE CUSTOMER A011                       PAGECITY                                                                            
+ A0012  PAGE CUSTOMER A012                       PAGECITY                                                                            
+ A0013  PAGE CUSTOMER A013                       PAGECITY                                                                            
+ A0014  PAGE CUSTOMER A014                       PAGECITY                                                                            
+ A0015  PAGE CUSTOMER A015                       PAGECITY                                                                            
+ A0016  PAGE CUSTOMER A016                       PAGECITY                                                                            
+ A0017  PAGE CUSTOMER A017                       PAGECITY                                                                            
+ A0018  PAGE CUSTOMER A018                       PAGECITY                                                                            
+ A0019  PAGE CUSTOMER A019                       PAGECITY                                                                            
+ A0020  PAGE CUSTOMER A020                       PAGECITY                                                                            
+ A0021  PAGE CUSTOMER A021                       PAGECITY                                                                            
+ A0022  PAGE CUSTOMER A022                       PAGECITY                                                                            
+ A0023  PAGE CUSTOMER A023                       PAGECITY                                                                            
+ A0024  PAGE CUSTOMER A024                       PAGECITY                                                                            
+ A0025  PAGE CUSTOMER A025                       PAGECITY                                                                            
+ A0026  PAGE CUSTOMER A026                       PAGECITY                                                                            
+ A0027  PAGE CUSTOMER A027                       PAGECITY                                                                            
+ A0028  PAGE CUSTOMER A028                       PAGECITY                                                                            
+ A0029  PAGE CUSTOMER A029                       PAGECITY                                                                            
+ A0030  PAGE CUSTOMER A030                       PAGECITY                                                                            
+ A0031  PAGE CUSTOMER A031                       PAGECITY                                                                            
+ A0032  PAGE CUSTOMER A032                       PAGECITY                                                                            
+ A0033  PAGE CUSTOMER A033                       PAGECITY                                                                            
+ A0034  PAGE CUSTOMER A034                       PAGECITY                                                                            
+ A0035  PAGE CUSTOMER A035                       PAGECITY                                                                            
+ A0036  PAGE CUSTOMER A036                       PAGECITY                                                                            
+ A0037  PAGE CUSTOMER A037                       PAGECITY                                                                            
+ A0038  PAGE CUSTOMER A038                       PAGECITY                                                                            
+ A0039  PAGE CUSTOMER A039                       PAGECITY                                                                            
+ A0040  PAGE CUSTOMER A040                       PAGECITY                                                                            
+ A0041  PAGE CUSTOMER A041                       PAGECITY                                                                            
+ A0042  PAGE CUSTOMER A042                       PAGECITY                                                                            
+ A0043  PAGE CUSTOMER A043                       PAGECITY                                                                            
+ A0044  PAGE CUSTOMER A044                       PAGECITY                                                                            
+ A0045  PAGE CUSTOMER A045                       PAGECITY                                                                            
+ A0046  PAGE CUSTOMER A046                       PAGECITY                                                                            
+ A0047  PAGE CUSTOMER A047                       PAGECITY                                                                            
+ A0048  PAGE CUSTOMER A048                       PAGECITY                                                                            
+0          CUSTOMERS IN COUNTRY      48                                                                                              
+-                                                                                                                                    
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+111/25/26            NORTHWIND TRADERS - DALLAS    CUSTOMER LIST BY COUNTRY      PAGE   2                                            
+0CUST   COMPANY                                  CITY            CONTACT                        PHONE                                
+0COUNTRY: BBPAGELAND                                                                                                                 
+ B0001  PAGE CUSTOMER B001                       PAGECITY                                                                            
+ B0002  PAGE CUSTOMER B002                       PAGECITY                                                                            
+ B0003  PAGE CUSTOMER B003                       PAGECITY                                                                            
+ B0004  PAGE CUSTOMER B004                       PAGECITY                                                                            
+ B0005  PAGE CUSTOMER B005                       PAGECITY                                                                            
+ B0006  PAGE CUSTOMER B006                       PAGECITY                                                                            
+ B0007  PAGE CUSTOMER B007                       PAGECITY                                                                            
+ B0008  PAGE CUSTOMER B008                       PAGECITY                                                                            
+ B0009  PAGE CUSTOMER B009                       PAGECITY                                                                            
+ B0010  PAGE CUSTOMER B010                       PAGECITY                                                                            
+ B0011  PAGE CUSTOMER B011                       PAGECITY                                                                            
+ B0012  PAGE CUSTOMER B012                       PAGECITY                                                                            
+ B0013  PAGE CUSTOMER B013                       PAGECITY                                                                            
+ B0014  PAGE CUSTOMER B014                       PAGECITY                                                                            
+ B0015  PAGE CUSTOMER B015                       PAGECITY                                                                            
+ B0016  PAGE CUSTOMER B016                       PAGECITY                                                                            
+ B0017  PAGE CUSTOMER B017                       PAGECITY                                                                            
+ B0018  PAGE CUSTOMER B018                       PAGECITY                                                                            
+ B0019  PAGE CUSTOMER B019                       PAGECITY                                                                            
+ B0020  PAGE CUSTOMER B020                       PAGECITY                                                                            
+ B0021  PAGE CUSTOMER B021                       PAGECITY                                                                            
+ B0022  PAGE CUSTOMER B022                       PAGECITY                                                                            
+ B0023  PAGE CUSTOMER B023                       PAGECITY                                                                            
+ B0024  PAGE CUSTOMER B024                       PAGECITY                                                                            
+ B0025  PAGE CUSTOMER B025                       PAGECITY                                                                            
+ B0026  PAGE CUSTOMER B026                       PAGECITY                                                                            
+ B0027  PAGE CUSTOMER B027                       PAGECITY                                                                            
+ B0028  PAGE CUSTOMER B028                       PAGECITY                                                                            
+ B0029  PAGE CUSTOMER B029                       PAGECITY                                                                            
+ B0030  PAGE CUSTOMER B030                       PAGECITY                                                                            
+ B0031  PAGE CUSTOMER B031                       PAGECITY                                                                            
+ B0032  PAGE CUSTOMER B032                       PAGECITY                                                                            
+ B0033  PAGE CUSTOMER B033                       PAGECITY                                                                            
+ B0034  PAGE CUSTOMER B034                       PAGECITY                                                                            
+ B0035  PAGE CUSTOMER B035                       PAGECITY                                                                            
+ B0036  PAGE CUSTOMER B036                       PAGECITY                                                                            
+ B0037  PAGE CUSTOMER B037                       PAGECITY                                                                            
+ B0038  PAGE CUSTOMER B038                       PAGECITY                                                                            
+ B0039  PAGE CUSTOMER B039                       PAGECITY                                                                            
+ B0040  PAGE CUSTOMER B040                       PAGECITY                                                                            
+ B0041  PAGE CUSTOMER B041                       PAGECITY                                                                            
+ B0042  PAGE CUSTOMER B042                       PAGECITY                                                                            
+ B0043  PAGE CUSTOMER B043                       PAGECITY                                                                            
+ B0044  PAGE CUSTOMER B044                       PAGECITY                                                                            
+ B0045  PAGE CUSTOMER B045                       PAGECITY                                                                            
+ B0046  PAGE CUSTOMER B046                       PAGECITY                                                                            
+ B0047  PAGE CUSTOMER B047                       PAGECITY                                                                            
+ B0048  PAGE CUSTOMER B048                       PAGECITY                                                                            
+ B0049  PAGE CUSTOMER B049                       PAGECITY                                                                            
+ B0050  PAGE CUSTOMER B050                       PAGECITY                                                                            
+ B0051  PAGE CUSTOMER B051                       PAGECITY                                                                            
+-                                                                                                                                    
+-                                                   -=* https://pub400.com *=-                                                       
+111/25/26            NORTHWIND TRADERS - DALLAS    CUSTOMER LIST BY COUNTRY      PAGE   3                                            
+0CUST   COMPANY                                  CITY            CONTACT                        PHONE                                
+ B0052  PAGE CUSTOMER B052                       PAGECITY                                                                            
+0          CUSTOMERS IN COUNTRY      52                                                                                              
+0COUNTRY: CCPAGELAND                                                                                                                 
+ C0001  PAGE CUSTOMER C001                       PAGECITY                                                                            
+ C0002  PAGE CUSTOMER C002                       PAGECITY                                                                            
+ C0003  PAGE CUSTOMER C003                       PAGECITY                                                                            
+ C0004  PAGE CUSTOMER C004                       PAGECITY                                                                            
+ C0005  PAGE CUSTOMER C005                       PAGECITY                                                                            
+ C0006  PAGE CUSTOMER C006                       PAGECITY                                                                            
+ C0007  PAGE CUSTOMER C007                       PAGECITY                                                                            
+ C0008  PAGE CUSTOMER C008                       PAGECITY                                                                            
+ C0009  PAGE CUSTOMER C009                       PAGECITY                                                                            
+ C0010  PAGE CUSTOMER C010                       PAGECITY                                                                            
+ C0011  PAGE CUSTOMER C011                       PAGECITY                                                                            
+ C0012  PAGE CUSTOMER C012                       PAGECITY                                                                            
+ C0013  PAGE CUSTOMER C013                       PAGECITY                                                                            
+ C0014  PAGE CUSTOMER C014                       PAGECITY                                                                            
+ C0015  PAGE CUSTOMER C015                       PAGECITY                                                                            
+ C0016  PAGE CUSTOMER C016                       PAGECITY                                                                            
+ C0017  PAGE CUSTOMER C017                       PAGECITY                                                                            
+ C0018  PAGE CUSTOMER C018                       PAGECITY                                                                            
+ C0019  PAGE CUSTOMER C019                       PAGECITY                                                                            
+ C0020  PAGE CUSTOMER C020                       PAGECITY                                                                            
+ C0021  PAGE CUSTOMER C021                       PAGECITY                                                                            
+ C0022  PAGE CUSTOMER C022                       PAGECITY                                                                            
+ C0023  PAGE CUSTOMER C023                       PAGECITY                                                                            
+ C0024  PAGE CUSTOMER C024                       PAGECITY                                                                            
+ C0025  PAGE CUSTOMER C025                       PAGECITY                                                                            
+ C0026  PAGE CUSTOMER C026                       PAGECITY                                                                            
+ C0027  PAGE CUSTOMER C027                       PAGECITY                                                                            
+ C0028  PAGE CUSTOMER C028                       PAGECITY                                                                            
+ C0029  PAGE CUSTOMER C029                       PAGECITY                                                                            
+ C0030  PAGE CUSTOMER C030                       PAGECITY                                                                            
+ C0031  PAGE CUSTOMER C031                       PAGECITY                                                                            
+ C0032  PAGE CUSTOMER C032                       PAGECITY                                                                            
+ C0033  PAGE CUSTOMER C033                       PAGECITY                                                                            
+ C0034  PAGE CUSTOMER C034                       PAGECITY                                                                            
+ C0035  PAGE CUSTOMER C035                       PAGECITY                                                                            
+ C0036  PAGE CUSTOMER C036                       PAGECITY                                                                            
+ C0037  PAGE CUSTOMER C037                       PAGECITY                                                                            
+ C0038  PAGE CUSTOMER C038                       PAGECITY                                                                            
+ C0039  PAGE CUSTOMER C039                       PAGECITY                                                                            
+ C0040  PAGE CUSTOMER C040                       PAGECITY                                                                            
+ C0041  PAGE CUSTOMER C041                       PAGECITY                                                                            
+ C0042  PAGE CUSTOMER C042                       PAGECITY                                                                            
+ C0043  PAGE CUSTOMER C043                       PAGECITY                                                                            
+ C0044  PAGE CUSTOMER C044                       PAGECITY                                                                            
+ C0045  PAGE CUSTOMER C045                       PAGECITY                                                                            
+ C0046  PAGE CUSTOMER C046                       PAGECITY                                                                            
+ C0047  PAGE CUSTOMER C047                       PAGECITY                                                                            
+ C0048  PAGE CUSTOMER C048                       PAGECITY                                                                            
+0          CUSTOMERS IN COUNTRY      48                                                                                              
+-                                                                                                                                    
+                                                    -=* https://pub400.com *=-                                                       
+111/25/26            NORTHWIND TRADERS - DALLAS    CUSTOMER LIST BY COUNTRY      PAGE   4                                            
+0CUST   COMPANY                                  CITY            CONTACT                        PHONE                                
+-          TOTAL CUSTOMERS          148                                                                                              
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+-                                                                                                                                    
+0                                                   -=* https://pub400.com *=-                                                       
