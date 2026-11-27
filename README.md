@@ -1,5 +1,7 @@
 # northwind-cobol-to-go
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24591998.svg)](https://doi.org/10.5281/zenodo.24591998)
+
 Two IBM i COBOL batch programs from the [Northwind IBM i COBOL application](https://github.com/ZodandSons/northwind-ibmi-cobol-legacy-application) (upstream author's code, commit `1b12bbb76c7176247abbe58dfd87da40549767c4`, GPL-3.0) were converted by the Milton Prism migration platform into two Go gRPC services. An LLM-based agent wrote the Go code. The platform accepted the code after it passed the build, vet, test, module and vulnerability checks recorded in claims C3 and C4; the manifest, signature and golden checks were run afterwards and are reported below. In memory, the NWC620 invoice output matches the real COBOL output on 168 of 168 records. The NWC700 customer list matches on 186 of 188 records; the two that differ are two customers with equal sort keys, printed in swapped order. The same two services were also run against real Db2 for i on the PUB400 public IBM i host, through their own Db2 adapter on 2026-11-27: NWC620 168 of 168 identical, NWC700 186 of 188 identical, with the same two-record swap and no Db2 error from either service.
 
 ## What this is
