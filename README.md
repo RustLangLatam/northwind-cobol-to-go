@@ -1,6 +1,6 @@
 # northwind-cobol-to-go
 
-Two IBM i COBOL batch programs from the [Northwind IBM i COBOL application](https://github.com/ZodandSons/northwind-ibmi-cobol-legacy-application) (upstream author's code, commit `1b12bbb76c7176247abbe58dfd87da40549767c4`, GPL-3.0) were converted by the Milton Prism migration platform into two Go gRPC services. An LLM-based agent wrote the Go code. The platform accepted the code after it passed the build, vet, test, module and vulnerability checks recorded in claims C3 and C4; the manifest, signature and golden checks were run afterwards and are reported below. In memory, the NWC620 invoice output matches the real COBOL output on 168 of 168 records. The NWC700 customer list matches on 186 of 188 records; the two that differ are two customers with equal sort keys, printed in swapped order. The Db2 for i run of these services was not done, because the host could not be reached.
+Two IBM i COBOL batch programs from the [Northwind IBM i COBOL application](https://github.com/ZodandSons/northwind-ibmi-cobol-legacy-application) (upstream author's code, commit `1b12bbb76c7176247abbe58dfd87da40549767c4`, GPL-3.0) were converted by the Milton Prism migration platform into two Go gRPC services. An LLM-based agent wrote the Go code. The platform accepted the code after it passed the build, vet, test, module and vulnerability checks recorded in claims C3 and C4; the manifest, signature and golden checks were run afterwards and are reported below. In memory, the NWC620 invoice output matches the real COBOL output on 168 of 168 records. The NWC700 customer list matches on 186 of 188 records; the two that differ are two customers with equal sort keys, printed in swapped order. The same two services were also run against real Db2 for i on the PUB400 public IBM i host, through their own Db2 adapter on 2026-11-27: NWC620 168 of 168 identical, NWC700 186 of 188 identical, with the same two-record swap and no Db2 error from either service.
 
 ## What this is
 
@@ -46,7 +46,8 @@ The screenshots come from the Milton Prism web panel. The product header in the 
 | Tests | 122 test runs: 90 top-level tests and 32 subtests; 0 failed, 0 skipped | `go test -count=1 -v ./...` (re-run for this README) |
 | NWC620, in memory | 168 of 168 records byte-identical, on the same page and line | [`evidence/fidelity/nwc620-golden-compare-output.txt`](evidence/fidelity/nwc620-golden-compare-output.txt) (re-run, same output) |
 | NWC700, in memory | 186 of 188 records identical. The 2 differences are explained below | [`evidence/fidelity/nwc700-golden-compare-output.txt`](evidence/fidelity/nwc700-golden-compare-output.txt) (re-run, same output) |
-| Db2 for i run of these services | **Not done.** The host did not answer | [`evidence/fidelity/README.md`](evidence/fidelity/README.md), section "real Db2 for i (PUB400): NOT RUN" |
+| NWC620, real Db2 for i | 168 of 168 records byte-identical, on the same page and line. Order 1006 is not on file: `NW2201`, no spooled file, as COBOL | [`evidence/fidelity-db2/README.md`](evidence/fidelity-db2/README.md) (run 2026-11-27) |
+| NWC700, real Db2 for i | 186 of 188 records identical. The same 2 equal-key records are swapped | [`evidence/fidelity-db2/README.md`](evidence/fidelity-db2/README.md) (run 2026-11-27) |
 
 ### What the in-memory comparison covers
 
@@ -54,7 +55,7 @@ The comparison feeds the same CSV data that was loaded into the real IBM i files
 
 Before comparing, the golden output has the PUB400 footer line `-=* https://pub400.com *=-` and the blank spacing lines removed. For NWC700, the empty first page that IBM i adds before the first heading is also removed, as described in [`evidence/golden-nwc700/README.md`](evidence/golden-nwc700/README.md). For NWC620, the empty first page is not removed. The runner checks that both sides have it, and counts a mismatch as a difference.
 
-The in-memory repositories do not run any SQL. So these runs test the report logic, not the Db2 queries or the host's sort order.
+The in-memory repositories do not run any SQL, so these runs test the report logic only. The Db2 queries and the host's sort are tested by the real Db2 for i run in [`evidence/fidelity-db2/`](evidence/fidelity-db2/).
 
 ### NWC620: 168 of 168
 
@@ -147,7 +148,7 @@ go run ./cmd/goldencompare700 "$REPO/evidence/golden-nwc700"
 
 Expected final lines: `TOTAL records compared: 168, identical: 168, differing items: 0` and `TOTAL records compared: 188, identical: 186, differing items: 2`. The stored outputs are in [`evidence/fidelity/`](evidence/fidelity/).
 
-`db2realrun620` was started once and failed at its first connection; `db2realrun700` was not run. Both runners need the PUB400 host and a password file.
+Both Db2 runners ran on 2026-11-27 against PUB400 and their output is in [`evidence/fidelity-db2/`](evidence/fidelity-db2/). Both need the PUB400 host and a password file.
 
 ## Naming
 
@@ -159,7 +160,7 @@ This repository is licensed under the GNU General Public License v3.0 (see [`LIC
 
 ## What depends on others
 
-- **PUB400**, a free public IBM i host, ran the golden programs and was the only target for the Db2 run. The Db2 run did not happen because the host was unreachable.
+- **PUB400**, a free public IBM i host, ran the golden programs and was the target of the Db2 run on 2026-11-27.
 - **The upstream Northwind author's code** supplies the COBOL source, the DDS and the copybooks. The golden runs compiled them unchanged.
 - **The Go module proxy** supplies the modules in `generated/go.mod` on the first build.
 - **The vulnerability database** used by `govulncheck` supplies the vulnerability result.
@@ -171,12 +172,12 @@ The golden runs used a small synthetic data set (the CSV files in `evidence/gold
 
 - **Two of 13 planned programs.** Only NWC620 and NWC700 were generated. The signed record lists the other 11 plan services (nwc100, nwc190, nwc200, nwc300, nwc400, nwc490, nwc500, nwc510, nwc520, nwc600, nwc610) as `not_selected`. The generated README names them too. Their code is not in this repository.
 - **Both programs are batch jobs.** Neither is an interactive (5250) program.
-- **The Db2 for i run was not done.** Between 2026-11-25 21:41 and 22:12 UTC, the PUB400 host refused every connection attempt on the ports tried (`connect: no route to host`). No connection was opened, so no statement reached the host; the state of the library could not be listed. The Go services have not run against Db2 for i.
-- **The NWC700 difference is real.** The 2 records `C0008` and `C0009` are swapped, as described above. The in-memory run cannot tell whether the host's sort would order them the same way.
+- **The Db2 for i run covers one host and one synthetic data set.** The runs used the golden CSV data on PUB400, with DB2_COMMIT_MODE=*NONE. Real order and customer data, other data volumes and other IBM i systems were not tested. The earlier attempt on 2026-11-25 failed at its first connection, before any statement reached the host.
+- **The NWC700 difference is real on the host too.** The 2 records `C0008` and `C0009` are swapped, as described above. The Db2 run gave the same swap, because the port's SQL sorts equal keys by customer number. The COBOL source does not define the order of equal keys.
 - **The signed verification record FAILED.** It is a verification record, not an attestation, because the full-plan policy was not met: only 2 of 13 plan services were generated. The record's top-level `verificationResult` is `FAILED`. Its claim `C7` is `FAILED` with the reason "2 of 13 plan services generated". The record's `notIssuableReason` reads: "ATTESTATION_PARTIAL_PLAN: partial plan: 2 of 13 plan services generated, migration state MIGRATION_STATE_PARTIAL".
 - **Claim `C8` was not measured.** Its reason is "not measured: sharedTables (a table is declared outside core/services/<name>, so no service owns the declaration)". The shared-table part of the structural check did not run. The other figures in `C8` (2 services, 0 cycles, 0 inter-service edges) are in the record.
 - **First-party, not third-party.** The signed verification record is issued by the platform about its own output. It records what was measured, it "is not a third-party certification", and it "does not assert conformity to the migration plan, functional equivalence or fitness for production." The files named `attestation-*` in `evidence/signature/` belong to this record. A valid signature shows that the key in `attestation_keys.json` signed these exact bytes. It does not show that the code is correct.
 - **The services need configuration before they start.** The deliverable's README notes that `SERVICE_TIME_ZONE` is empty and each service refuses to start until it is set. `DB2_CCSID` and `DB2_COMMIT_MODE` are also required. See [`generated/README.md`](generated/README.md).
-- **The in-memory runs do not test Db2.** They test the report logic against the real output. The Db2 queries and the host's sort order are untested.
+- **The in-memory runs do not test Db2.** They test the report logic against the real output. The Db2 queries and the host's sort were tested only by the 2026-11-27 run.
 
-The next concrete step is the Db2 for i run: once PUB400 answers, run `db2realrun620` and `db2realrun700` as described in [`evidence/fidelity/README.md`](evidence/fidelity/README.md), then compare the results with the golden files.
+The next concrete step is a decision on the equal-key order of NWC700. Either record the customer-number tie-break as an accepted, documented difference, or change the port's sort and re-run `db2realrun700` as described in [`evidence/fidelity-db2/README.md`](evidence/fidelity-db2/README.md).

@@ -1,6 +1,6 @@
 # NWC620 + NWC700 fidelity on the attested deliverable of this two-service build (2026-11-25)
 
-Status: **in-memory runs done; real Db2 for i runs NOT RUN** (PUB400 unreachable, see below).
+Status: **in-memory runs done; real Db2 for i runs done** on 2026-11-27 (see the last section and [`../fidelity-db2/`](../fidelity-db2/)).
 
 ## Code under test
 
@@ -19,9 +19,9 @@ Status: **in-memory runs done; real Db2 for i runs NOT RUN** (PUB400 unreachable
 | File | Service | Repository |
 |------|---------|------------|
 | `goldencompare620.go.txt` | NWC620 | in memory, from the golden CSVs |
-| `db2realrun620.go.txt` | NWC620 | `repositories.NewDb2InvoiceRepository` on Db2 for i (PUB400) |
+| `db2realrun620.go.txt` | NWC620 | `repositories.NewDb2InvoiceRepository` on Db2 for i (PUB400); ran 2026-11-27 |
 | `goldencompare700.go.txt` | NWC700 | in memory, from the golden CSVs |
-| `db2realrun700.go.txt` | NWC700 | `repositories.NewDb2CustomerRepository` on Db2 for i (PUB400) |
+| `db2realrun700.go.txt` | NWC700 | `repositories.NewDb2CustomerRepository` on Db2 for i (PUB400); ran 2026-11-27 |
 
 ### NWC620: changes from the earlier one-service build's runners
 
@@ -69,8 +69,8 @@ Golden: `../golden-nwc700/`. Data sets edge, empty and pages; clock fixed at
 - In memory, the repository mirrors the Db2 repository's `ListByCountry`: CHAR values are
   blank padded to their widths and sorted by `ORDER BY CMCNTY, CMCITY, CMNAME, CMCUST`, in
   EBCDIC byte order (`charmap.CodePage037`). Every character of the data sets is the same in
-  CCSID 37 and 273. So the in-memory run tests the report logic. Only the Db2 run tests the
-  host's real sort.
+  CCSID 37 and 273. So the in-memory run tests the report logic. The Db2 run tests the
+  host's real sort: it gave the same two-record swap (see the last section).
 
 ## Results: in memory
 
@@ -103,29 +103,40 @@ Go    p1 l26 | C0008  TIE CO ... INSERTED SECOND
 Go    p1 l27 | C0009  TIE CO ... INSERTED FIRST
 ```
 
-The OPM SORT kept arrival order for equal keys in the golden run. The port adds `CMCUST` as
+The OPM SORT kept arrival order for equal keys in the golden run. The real Db2 run gave the same swap, so the host's sort does not change the result. The port adds `CMCUST` as
 a last sort key (PORT-NOTE in `db2_customer_repository.go`: "The COBOL SORT leaves equal keys
 in an undefined order"). It sorts C0008 before C0009, so these two records are swapped. The upstream SORT has no `WITH DUPLICATES IN ORDER` clause, so COBOL does not define the relative order of records with equal keys. The host printed them in arrival order, the Go service by customer number; the source program guarantees neither. The statement is at [qcblsrc/nwc700.cbl, lines 115-116](https://github.com/ZodandSons/northwind-ibmi-cobol-legacy-application/blob/1b12bbb76c7176247abbe58dfd87da40549767c4/qcblsrc/nwc700.cbl#L115-L116).
 Everything else matches byte for byte: the blank country, the EBCDIC order of lower case
 and digits, status D printed, full-width fields, every page break of the pages set, and the
 empty file.
 
-## Results: real Db2 for i (PUB400): NOT RUN
+## Results: real Db2 for i (PUB400): done on 2026-11-27
 
-Both Db2 runners were built (`go vet` clean). The upstream DDS was fetched at commit
-`1b12bbb76c7176247abbe58dfd87da40549767c4`, the same commit as the earlier build's run. sha256 of the five
-files: cusmst `790e0e35...`, ordhdr `6382f3d8...`, orddtl `f11fe9de...`, prdmst `23ddb2a8...`,
-codtbl `711302e0...`.
+Both Db2 runners ran against PUB400 on 2026-11-27 through each service's own Db2 adapter
+(`db2access.ConfigFromEnv`, job CCSID 273, commit mode `*NONE`, TLS). The full logs and the
+README of that run are in [`../fidelity-db2/`](../fidelity-db2/).
 
-From 2026-11-25 21:41 UTC to 22:12 UTC, pub400.com (185.113.5.134) answered `connect: no
-route to host` on every port tried: 9471, 9476, 449, 8471, 8476, 443, 22 and 23. ICMP failed
-the same way, whether the local environment's restrictions were on or off. The one attempt of `db2realrun620` failed at its
-first dial (`dial tcp 185.113.5.134:9476: connect: no route to host`). No connection was
-opened, so no statement reached the host and nothing was created in PRISMIA1 and no spooled
-file was made. That run's log was discarded. The PRISMIA1 state could not be listed, so it
-is not verified here.
+| Service | Records compared | Identical | Differing | Db2 errors |
+|---------|------------------|-----------|-----------|------------|
+| NWC620 | 168 | 168 | 0 | none |
+| NWC700 | 188 | 186 | 2 | none |
 
-To finish this, run:
+- **NWC620.** The six printed orders match, with the empty first page on both sides. Order
+  1006 is not on file: the service returns `NW2201`, no spooled file is made, and R49 matches.
+- **NWC700.** The empty and pages sets match. The edge set differs only by the two equal-key
+  `TIE CO` customers, swapped as described above.
+- **Tie order.** The repository's SQL adds `CMCUST` as the last `ORDER BY` key, so the host
+  returns C0008 before C0009. The COBOL SORT of the golden run kept arrival order.
+- **Setup and cleanup.** The runners loaded the golden CSV rows into new files in PRISMIA1 with
+  SQL `INSERT`, ran the services, and deleted the files and the spooled listings. The library
+  was checked before and after: the object, member and spooled file listings match. The only
+  failed statement is the cleanup's defensive `DROP ALIAS` (SQL0204), which fails because the
+  alias had already been dropped.
+
+An earlier attempt on 2026-11-25 failed at its first connection, before any statement reached
+the host. That log was discarded.
+
+To repeat the run:
 `db2realrun620 run <ddsdir> ../golden-nwc620 <spooldir>`, then
 `db2realrun700 run <ddsdir> ../golden-nwc700 <spooldir>`. Settings:
 DB2_CCSID=273, DB2_COMMIT_MODE=*NONE, library PRISMIA1 only, with the before/after listings

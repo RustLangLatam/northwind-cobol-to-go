@@ -2,7 +2,7 @@
 
 This folder holds the proof for the code in [`../generated/`](../generated/): the signed archive, the signature checks, the golden output of the real COBOL programs, and the comparisons between the two. The root [`README.md`](../README.md) lists the results and the commands to check them.
 
-**What was changed, and what was kept.** The files under `signature/` are unchanged. The PUB400 public address and the PUB400 user profile appear as produced, in the golden-run files. In `fidelity/`, labels that named internal builds were replaced: "this build" for the build label, "the earlier one-service build" for the earlier NWC620 build, "evidence/signature" for the original archive folder, and "the local environment" for the sandbox. The golden NWC700 README gained a sentence on the equal-key sort, and one en dash in the golden NWC620 README was replaced by "none".
+**What was changed, and what was kept.** The files under `signature/` are unchanged. The PUB400 public address and the PUB400 user profile appear as produced, in the golden-run files. In `fidelity/`, labels that named internal builds were replaced: "this build" for the build label, "the earlier one-service build" for the earlier NWC620 build, "evidence/signature" for the original archive folder, and "the local environment" for the sandbox. The folder `fidelity-db2/` (the real Db2 for i run of 2026-11-27) was sanitised the same way: "this build" for the build label, "the earlier one-service build" for the earlier build, and `<workdir>`, `<repo>` and `<password-file>` for local paths. The golden NWC700 README gained a sentence on the equal-key sort, and one en dash in the golden NWC620 README was replaced by "none".
 
 ## How the folders relate
 
@@ -40,13 +40,17 @@ The comparison of the generated services against the real COBOL output. The meth
 
 | File | What it is |
 |------|------------|
-| `README.md` | The method, the rules for each comparison, the results, and why the Db2 run was not done. |
+| `README.md` | The method, the rules for each comparison, the in-memory results, and the real Db2 for i results (2026-11-27). |
 | `goldencompare620.go.txt` | Runner. It feeds the NWC620 test data to the service in memory and compares the spool output with the golden invoices. Usage: `goldencompare620 <golden dir>`. |
 | `goldencompare700.go.txt` | Runner. The same for NWC700, against the three customer sets. Usage: `goldencompare700 <golden dir>`. |
 | `nwc620-golden-compare-output.txt` | The stored output of the NWC620 runner: 168 of 168 identical. |
 | `nwc700-golden-compare-output.txt` | The stored output of the NWC700 runner: 186 of 188 identical, with the two differing records printed. |
-| `db2realrun620.go.txt` | Runner for NWC620 against Db2 for i on PUB400. It was started once and failed at its first connection. It takes a password file and a DDS directory. |
-| `db2realrun700.go.txt` | Runner for NWC700 against Db2 for i on PUB400. It was not run. |
+| `db2realrun620.go.txt` | Runner for NWC620 against Db2 for i on PUB400. It ran on 2026-11-27 (see [`fidelity-db2/`](fidelity-db2/)). It takes a password file and a DDS directory. |
+| `db2realrun700.go.txt` | Runner for NWC700 against Db2 for i on PUB400. It ran on 2026-11-27 (see [`fidelity-db2/`](fidelity-db2/)). |
+
+## fidelity-db2/
+
+The real Db2 for i run of 2026-11-27: NWC620 and NWC700 against PUB400 through their own Db2 adapter. The method, the results and the cleanup are in [`fidelity-db2/README.md`](fidelity-db2/README.md). It holds the two run logs and the two comparison outputs. The runners are the two in `fidelity/`.
 
 The `.go.txt` suffix keeps these runners out of the Go build. To run them, copy them into a copy of `generated/` (see the root README, step 6).
 

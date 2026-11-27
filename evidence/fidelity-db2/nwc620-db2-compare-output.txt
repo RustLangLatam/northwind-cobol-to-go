@@ -1,0 +1,15 @@
+store connected (db2access.Open, CCSID 273, commit *NONE)
+order 1001: status=0 empty leading page COBOL=true Go=true (R48 MATCHES)
+order 1001: 13 COBOL records, 13 Go records, 0 differing
+order 1002: status=0 empty leading page COBOL=true Go=true (R48 MATCHES)
+order 1002: 12 COBOL records, 12 Go records, 0 differing
+order 1003: status=0 empty leading page COBOL=true Go=true (R48 MATCHES)
+order 1003: 63 COBOL records, 63 Go records, 0 differing
+order 1004: status=0 empty leading page COBOL=true Go=true (R48 MATCHES)
+order 1004: 57 COBOL records, 57 Go records, 0 differing
+order 1006: no golden file (ILE: no spooled file); Go error=NW2201 Failure_Order_Not_Found spooled files=0 (R49 MATCHES)
+order 1007: status=0 empty leading page COBOL=true Go=true (R48 MATCHES)
+order 1007: 10 COBOL records, 10 Go records, 0 differing
+order 9999999: status=0 empty leading page COBOL=true Go=true (R48 MATCHES)
+order 9999999: 13 COBOL records, 13 Go records, 0 differing
+TOTAL records compared: 168, identical: 168, differing items: 0

@@ -1,0 +1,14 @@
+store connected (db2access.Open, CCSID 273, commit *NONE)
+set edge: Go customers=11 pages=1 file NWC700-QSYSPRT; golden content pages=1 (empty leading page on the host: true, stripped)
+  set edge rec 18
+    COBOL p1 l26 | C0009  TIE CO                                   TESTVILLE       INSERTED FIRST                                                      |
+    Go    p1 l26 | C0008  TIE CO                                   TESTVILLE       INSERTED SECOND                                                     |
+  set edge rec 19
+    COBOL p1 l27 | C0008  TIE CO                                   TESTVILLE       INSERTED SECOND                                                     |
+    Go    p1 l27 | C0009  TIE CO                                   TESTVILLE       INSERTED FIRST                                                      |
+set edge: 22 COBOL records, 22 Go records, 2 differing
+set empty: Go customers=0 pages=1 file NWC700-QSYSPRT; golden content pages=1 (empty leading page on the host: true, stripped)
+set empty: 3 COBOL records, 3 Go records, 0 differing
+set pages: Go customers=148 pages=4 file NWC700-QSYSPRT; golden content pages=4 (empty leading page on the host: true, stripped)
+set pages: 163 COBOL records, 163 Go records, 0 differing
+TOTAL records compared: 188, identical: 186, differing items: 2

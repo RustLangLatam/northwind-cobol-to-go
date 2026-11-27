@@ -1,0 +1,62 @@
+  PRISMIA | PRISMIA1 | 2026-11-27T12:29:11.093504Z | PUB400
+  273 | 273
+== before: objects in PRISMIA1
+  QCBLLESRC | *FILE | PF
+  QCLSRC | *FILE | PF
+  QCMDSRC | *FILE | PF
+  QCPPSRC | *FILE | PF
+  QDDSSRC | *FILE | PF
+  QRPGLESRC | *FILE | PF
+== before: members in PRISMIA1
+== before: spooled files of PRISMIA
+CL> CRTSRCPF FILE(PRISMIA1/ZNWDDS) RCDLEN(92)
+CL> ADDPFM FILE(PRISMIA1/ZNWDDS) MBR(CUSMST) SRCTYPE(PF)
+CL> CRTPF FILE(PRISMIA1/CUSMST) SRCFILE(PRISMIA1/ZNWDDS) SRCMBR(CUSMST)
+  CUSMST | CMCUST | CHAR | 5 | <NULL> | 273
+  CUSMST | CMNAME | CHAR | 40 | <NULL> | 273
+  CUSMST | CMCONT | CHAR | 30 | <NULL> | 273
+  CUSMST | CMTITL | CHAR | 30 | <NULL> | 273
+  CUSMST | CMADDR | CHAR | 60 | <NULL> | 273
+  CUSMST | CMCITY | CHAR | 15 | <NULL> | 273
+  CUSMST | CMREGN | CHAR | 15 | <NULL> | 273
+  CUSMST | CMPOST | CHAR | 10 | <NULL> | 273
+  CUSMST | CMCNTY | CHAR | 15 | <NULL> | 273
+  CUSMST | CMPHON | CHAR | 24 | <NULL> | 273
+  CUSMST | CMFAX | CHAR | 24 | <NULL> | 273
+  CUSMST | CMSTAT | CHAR | 1 | <NULL> | 273
+  CUSMST | CMCRDT | NUMERIC | 6 | 0 | <NULL>
+  CUSMST | CMCHDT | NUMERIC | 6 | 0 | <NULL>
+  CUSMST | CMCHUS | CHAR | 10 | <NULL> | 273
+[2026-11-27 13:29:19.760 +01:00]  INFO [default] [ctx_id=unknown] svcruntime: store connected
+store connected (db2access.Open, CCSID 273, commit *NONE)
+  CUSMST | 11
+set edge: Go customers=11 pages=1 file NWC700-QSYSPRT; golden content pages=1 (empty leading page on the host: true, stripped)
+  set edge rec 18
+    COBOL p1 l26 | C0009  TIE CO                                   TESTVILLE       INSERTED FIRST                                                      |
+    Go    p1 l26 | C0008  TIE CO                                   TESTVILLE       INSERTED SECOND                                                     |
+  set edge rec 19
+    COBOL p1 l27 | C0008  TIE CO                                   TESTVILLE       INSERTED SECOND                                                     |
+    Go    p1 l27 | C0009  TIE CO                                   TESTVILLE       INSERTED FIRST                                                      |
+set edge: 22 COBOL records, 22 Go records, 2 differing
+  CUSMST | 0
+set empty: Go customers=0 pages=1 file NWC700-QSYSPRT; golden content pages=1 (empty leading page on the host: true, stripped)
+set empty: 3 COBOL records, 3 Go records, 0 differing
+  CUSMST | 148
+set pages: Go customers=148 pages=4 file NWC700-QSYSPRT; golden content pages=4 (empty leading page on the host: true, stripped)
+set pages: 163 COBOL records, 163 Go records, 0 differing
+TOTAL records compared: 188, identical: 186, differing items: 2
+== cleanup
+  SQL FAILED "DROP ALIAS PRISMIA1.ZZALIAS": [SQL0204] ZZALIAS in PRISMIA1 type *FILE not found. (SQLSTATE 42704, SQLCODE -204)
+CL> DLTF FILE(PRISMIA1/CUSMST)
+CL> DLTF FILE(PRISMIA1/ZNWDDS)
+CL> DLTSPLF FILE(CUSMST) JOB(446725/PRISMIA/QPRTJOB) SPLNBR(45)
+== after: objects in PRISMIA1
+  QCBLLESRC | *FILE | PF
+  QCLSRC | *FILE | PF
+  QCMDSRC | *FILE | PF
+  QCPPSRC | *FILE | PF
+  QDDSSRC | *FILE | PF
+  QRPGLESRC | *FILE | PF
+== after: members in PRISMIA1
+== after: spooled files of PRISMIA
+== cleanup verification: objects true, members true, spooled files true (same as before), every listing query answered true
